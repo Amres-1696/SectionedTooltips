@@ -65,7 +65,8 @@ namespace SectionedTooltips
         {
             if (string.IsNullOrEmpty(rich)) return 0f;
             float size = RowSize(c);
-            TextMeshProUGUI t = Text(c, size, rich, Color.white, c.Measure(rich, size) > c.LabelCol ? Mathf.Max(c.LabelCol, size) : 0f);
+            float wrap = c.LabelCol > 0f && c.Measure(rich, size) > c.LabelCol ? Mathf.Max(c.LabelCol, size) : 0f;
+            TextMeshProUGUI t = Text(c, size, rich, Color.white, wrap);
             Ui.Move(t.rectTransform, LabelX(c), y);
             return t.rectTransform.sizeDelta.y;
         }
@@ -276,7 +277,7 @@ namespace SectionedTooltips
                     continue;
                 }
                 // 只在小标题下面（“模组效果：”）：孤零零一个“+20%”只是个数字。
-                if (pending != null && EffectOf(row) != null)
+                if (pending != null && module && EffectOf(row) != null)
                 {
                     y = Effects(c, bl, ref i, pending, y);
                     pending = "";
@@ -995,7 +996,7 @@ namespace SectionedTooltips
             {
                 Block bl = r.Blocks[i];
                 if (!OnSlip(bl.Key)) continue;
-                bool strip = StripsBrackets(c, bl);
+                bool strip = StripsBrackets(c, bl), module = bl.Key == Sections.Module;
                 for (int j = 0; j < bl.Rows.Count; j++)
                 {
                     Row row = bl.Rows[j];
@@ -1006,7 +1007,7 @@ namespace SectionedTooltips
                         Upgrade u = UpgradeOf(row);
                         string note;
                         if (u != null) w = Mathf.Max(w, c.Measure(u.Name, size));
-                        else if (EffectOf(row) == null) w = Mathf.Max(w, c.Measure(PairLabel(c, row, strip, out note), size));
+                        else if (!(module && EffectOf(row) != null)) w = Mathf.Max(w, c.Measure(PairLabel(c, row, strip, out note), size));
                     }
                     else
                     {
@@ -1056,7 +1057,7 @@ namespace SectionedTooltips
                         continue;
                     }
                     Upgrade u = UpgradeOf(row);
-                    Effect e = u == null ? EffectOf(row) : null;
+                    Effect e = u == null && module ? EffectOf(row) : null;
                     if (u != null) value = Mathf.Max(value, UpgradeWidth(c, u));
                     else if (e != null)
                     {
