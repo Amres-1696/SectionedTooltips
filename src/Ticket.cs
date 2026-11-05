@@ -102,6 +102,12 @@ namespace SectionedTooltips
                 Hide();
                 return;
             }
+            // 连续建失败到上限就不再画，显示游戏自己的 tooltip。
+            if (Fuse.IsOpen(TicketFuse))
+            {
+                Hide();
+                return;
+            }
             // 这张排版对应的估价单建失败了，就显示游戏自己的 tooltip，免得每帧都失败。
             if (ReferenceEquals(r, failedFor) && ReferenceEquals(item, failedItem))
             {
@@ -524,11 +530,17 @@ namespace SectionedTooltips
         private static LayoutResult failedFor;
         private static GameItemElement failedItem;
 
+        private const string TicketFuse = "估价单";
+
         /// 构建估价单，失败就把画到一半的丢掉：半张卡片绝不能当成这个物品的成品显示（Show 会一直显示它，而且永远不会销毁）。
         private static void Build(TMP_Text tmp, LayoutResult r, GameItemElement item)
         {
-            try { BuildCard(tmp, r, item); }
-            catch
+            try
+            {
+                BuildCard(tmp, r, item);
+                Fuse.Ok(TicketFuse);
+            }
+            catch (Exception e)
             {
                 Drop(card);
                 card = null;
@@ -536,6 +548,7 @@ namespace SectionedTooltips
                 builtItem = null;
                 failedFor = r;
                 failedItem = item;
+                Fuse.Fail(TicketFuse, e);
                 throw;
             }
         }
@@ -1900,7 +1913,7 @@ namespace SectionedTooltips
         }
 
         /// “标价：50”转成标签/数值行，转不了返回 null。
-        private static Row PairFromPlain(string plain)
+        internal static Row PairFromPlain(string plain)
         {
             plain = plain.Trim();
             int colon = plain.IndexOfAny(new char[] { ':', '：' });

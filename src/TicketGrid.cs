@@ -32,7 +32,7 @@ namespace SectionedTooltips
             string rich = InkRich(row.Label, InkSoft, false);
             if (!strip && c.Measure(rich, RowSize(c)) <= LabelCap(c)) return rich;
             string plain = PlainOf(row.Label).Trim();
-            int open = TrailingGroup(plain);
+            int open = TextRules.TrailingGroup(plain);
             if (open <= 0) return rich;
             note = plain.Substring(open + 1, plain.Length - open - 2).Trim();
             return Tint(plain.Substring(0, open).Trim(), InkSoft);
@@ -45,7 +45,7 @@ namespace SectionedTooltips
             {
                 Row row = bl.Rows[i];
                 if (!row.IsPair || UpgradeOf(row) != null || EffectOf(row) != null) continue;
-                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TrailingGroup(PlainOf(row.Label).Trim()) > 0) return true;
+                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(PlainOf(row.Label).Trim()) > 0) return true;
             }
             return false;
         }
@@ -102,7 +102,7 @@ namespace SectionedTooltips
             }
             if (!one) return ValueInks(segs);
             string plain = PlainOf(segs).Trim(), main = plain, note = "";
-            int open = TrailingGroup(plain);
+            int open = TextRules.TrailingGroup(plain);
             if (open > 0)
             {
                 main = plain.Substring(0, open).Trim();
@@ -138,26 +138,6 @@ namespace SectionedTooltips
                 sb.Append(Tint(text, ValueInk(s.Color)));
             }
             return sb.ToString().Trim();
-        }
-
-        /// s 末尾那组括号从哪里开始（“效率（电子元件（普通））” 得 2）；不是以括号结尾时返回 -1。
-        private static int TrailingGroup(string s)
-        {
-            if (s.Length < 2) return -1;
-            char last = s[s.Length - 1];
-            if (last != '）' && last != ')') return -1;
-            int depth = 0;
-            for (int i = s.Length - 1; i >= 0; i--)
-            {
-                char ch = s[i];
-                if (ch == '）' || ch == ')') depth++;
-                else if (ch == '（' || ch == '(')
-                {
-                    depth--;
-                    if (depth == 0) return i;
-                }
-            }
-            return -1;
         }
 
         // ---------------------------------------------------------------- 进度条
@@ -545,7 +525,7 @@ namespace SectionedTooltips
                 || !int.TryParse(v.Substring(slash + 1).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out max)
                 || max <= 0 || level < 0 || level > max) return null;
             string label = PlainOf(row.Label).Trim();
-            int open = TrailingGroup(label);
+            int open = TextRules.TrailingGroup(label);
             Upgrade u = new Upgrade();
             u.Level = level;
             u.Max = max;

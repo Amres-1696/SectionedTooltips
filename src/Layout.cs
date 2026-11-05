@@ -116,6 +116,7 @@ namespace SectionedTooltips
             }
             frameFresh = true;
             TextUnits.Configure();
+            LocTemplates.Check();
 
             List<Seg> segs = new List<Seg>(slices.Count);
             for (int i = 0; i < slices.Count; i++) segs.Add(SliceAccess.Read(slices[i]));
@@ -226,7 +227,6 @@ namespace SectionedTooltips
         /// 内容物面板已经显示了容器里的东西，所以其他模组加的内容物文字列表要删掉（如“内含 A×2、B、C”）：附加信息、其他两节里点到至少两个条目的行。别处只删写明了是什么、又点到其中一个条目的行（Item Details 的“内含：”、机器面板的标题“输入：A、B”）。
         private static void DropContentLists(List<Line> lines, ContentsInfo contents)
         {
-            string[] contains = ItemDetailsContains;
             for (int i = lines.Count - 1; i >= 0; i--)
             {
                 Line l = lines[i];
@@ -235,9 +235,8 @@ namespace SectionedTooltips
                 bool drop = false;
                 // 至少两个名字：只点到一个更像是在说那件物品（“可用电池：3”）。
                 if (l.Key == Sections.Mods || l.Key == Sections.Info) drop = contents.Entries.Count >= 2 && Names(plain, contents.Entries, 2);
-                // 机器的那个列表里可能有网格没显示的（模组），所以必须点到我们面板里的条目之一。
-                for (int k = 0; k < contains.Length && !drop; k++)
-                    if (plain.StartsWith(contains[k], StringComparison.Ordinal)) drop = Names(plain, contents.Entries, 1);
+                // “某种说明：A、B”这样的清单（Item Details 的“内含：”）：说明文字用什么语言都认。
+                if (!drop && TextRules.CaptionList(plain)) drop = Names(plain, contents.Entries, 1);
                 for (int g = 0; g < contents.Groups.Count && !drop; g++)
                 {
                     string label = contents.Groups[g].Label;
@@ -275,12 +274,6 @@ namespace SectionedTooltips
             }
             return kinds > 0 && hits >= Math.Min(need, kinds);
         }
-
-        /// Item Details 各语言里的“内含：”。直接列出来而不去查：它的英文是写死的，巴西葡语的表在游戏的 ptBR 下找不到。
-        private static readonly string[] ItemDetailsContains =
-        {
-            "内含：", "Contains:", "Enthält:", "Contiene:", "Contient :", "中身：", "포함:", "Zawiera:", "Contém:", "Содержит:",
-        };
 
         /// 把液体一节的液量条那一行挪进侧边面板的液位计。
         private static LiquidInfo ExtractLiquid(List<Line> lines)
@@ -610,9 +603,8 @@ namespace SectionedTooltips
             if (Settings.FractionBars != null && !Settings.FractionBars.Value) return;
             for (int i = 0; i < pair.Value.Count; i++) if (pair.Value[i].Bar != null) return;
 
-            string fraction = FractionPart(value);
             float a, b;
-            if (fraction == null || !ParseFraction(fraction, out a, out b) || b <= 0f) return;
+            if (!TextRules.ReadFraction(value, LocTemplates.Known, LocTemplates.Prefix, LocTemplates.Mid, out a, out b)) return;
             float ratio = a / b;
 
             BarMark m = new BarMark();
@@ -627,56 +619,6 @@ namespace SectionedTooltips
             gap.Text = TextUnits.Pad(TextUnits.Cell);
             pair.Value.Insert(0, gap);
             pair.Value.Insert(0, bar);
-        }
-
-        /// <summary>
-        /// value 里能画条的那段分数：整段是分数就用整段；“耐久度 311/400（已耗尽，不再过滤）”只取“311/400”。
-        /// 前面的短词不含数字，末尾只去掉一组括号；取不到返回 null。
-        /// </summary>
-        private static string FractionPart(string value)
-        {
-            string s = (value ?? "").Trim();
-            float a, b;
-            if (ParseFraction(s, out a, out b)) return s;
-
-            // 末尾的括号注解不属于分数。
-            if (s.Length > 1 && (s[s.Length - 1] == '）' || s[s.Length - 1] == ')'))
-            {
-                int open = s.LastIndexOfAny(new char[] { '（', '(' });
-                if (open > 0) s = s.Substring(0, open).TrimEnd();
-                if (ParseFraction(s, out a, out b)) return s;
-            }
-
-            // “耐久度 311/400”：空格前是不含数字的短词，分数在后面。
-            int space = s.IndexOfAny(new char[] { ' ', TextUnits.IdeographicSpace });
-            if (space <= 0 || space > 6) return null;
-            for (int i = 0; i < space; i++) if (char.IsDigit(s[i])) return null;
-            string tail = s.Substring(space + 1).Trim();
-            return ParseFraction(tail, out a, out b) ? tail : null;
-        }
-
-        /// “a/b”，两个数字后面可以带单位；别的都不算。
-        private static bool ParseFraction(string s, out float a, out float b)
-        {
-            a = b = 0f;
-            int slash = s.IndexOf('/');
-            if (slash <= 0 || s.IndexOf('/', slash + 1) >= 0) return false;
-            return ParseNumber(s.Substring(0, slash), out a) && ParseNumber(s.Substring(slash + 1), out b);
-        }
-
-        private static bool ParseNumber(string s, out float v)
-        {
-            v = 0f;
-            s = s.Trim();
-            int end = 0;
-            while (end < s.Length && (char.IsDigit(s[end]) || s[end] == '.' || s[end] == ',' || (end == 0 && s[end] == '-'))) end++;
-            if (end == 0) return false;
-            // 允许短单位（“ml”、“kg”、“kJ”、“格”），更长的就不当单位了。
-            string unit = s.Substring(end).Trim();
-            if (unit.Length > 3) return false;
-            for (int i = 0; i < unit.Length; i++) if (char.IsDigit(unit[i]) || unit[i] == '(' || unit[i] == '（') return false;
-            return float.TryParse(s.Substring(0, end).Replace(",", ""), System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out v);
         }
 
         private static List<Unit> StripBullet(List<Unit> u)

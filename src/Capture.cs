@@ -148,7 +148,7 @@ namespace SectionedTooltips
     [HarmonyPatch(typeof(GameItemElement), "GetTooltipBasic")]
     internal static class TooltipBasicPatch
     {
-        private static bool reported;
+        private const string LayoutFuse = "排版";
         private static GameItemElement checkedItem;
 
         /// 调试用：从我们的 prefix（最先）到 postfix（最后），即游戏和其他模组的耗时。
@@ -179,6 +179,7 @@ namespace SectionedTooltips
         {
             if (__result == null || Capture.Depth != 1) return;
             if (Settings.Enabled != null && !Settings.Enabled.Value) return;
+            if (Fuse.IsOpen(LayoutFuse)) return;
             bool timing = BasicTimer.IsRunning;
             if (timing)
             {
@@ -189,14 +190,12 @@ namespace SectionedTooltips
             {
                 Layout.Apply(Capture.Top, __result);
                 if (timing) Layout.LogSlowFrame(__instance, BasicMs);
+                Fuse.Ok(LayoutFuse);
             }
             catch (Exception e)
             {
-                if (!reported)
-                {
-                    reported = true;
-                    SectionedTooltipsMod.Error("layout failed, showing the vanilla tooltip: " + e);
-                }
+                // 连续失败到上限就不再排版，工具提示退回原版。
+                Fuse.Fail(LayoutFuse, e);
             }
         }
 
