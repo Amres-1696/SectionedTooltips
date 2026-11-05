@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+# 二进制
+*.png binary
+*.dll binary
+
+# 明确按文本处理，避免 Windows 上被转成 CRLF
+*.cs text
+*.csv text
+*.xml text
+*.md text
+*.txt text
+*.ps1 text
+*.bat text
+*.gitignore text
+*.gitattributes text
