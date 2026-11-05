@@ -478,30 +478,31 @@ namespace SectionedTooltips
         /// </summary>
         private sealed class TabLayout
         {
-            internal readonly float[] Columns;
-            internal readonly float Gap;
             internal readonly float Size;
             private readonly float[] start;
             private readonly float width;
 
             internal TabLayout(float[] columns, float gap, float size)
             {
-                Columns = columns;
-                Gap = gap;
                 Size = size;
                 start = new float[columns.Length];
                 float x = 0f;
                 for (int k = 0; k < columns.Length; k++)
                 {
+                    if (k > 0) x += gap;
                     start[k] = x;
-                    x += columns[k] + (k > 0 ? gap : 0f);
+                    x += columns[k];
                 }
                 width = x;
             }
 
-            internal int Count { get { return Columns.Length; } }
             internal float Width { get { return width; } }
-            internal float Start(int column) { return column >= 0 && column < start.Length ? start[column] : 0f; }
+            internal static int Column(int cell, int cells, int columns)
+            {
+                return cell == cells - 1 ? columns - 1 : cell;
+            }
+
+            internal float CellStart(int cell, int cells) { return start[Column(cell, cells, start.Length)]; }
         }
 
         /// 两列之间的间距：全角空格在游戏的 tooltip 里本来就比半角格宽。
@@ -534,7 +535,8 @@ namespace SectionedTooltips
                 for (int k = 0; k < cells.Count; k++)
                 {
                     float cw = c.Measure(ValueInks(cells[k]), size);
-                    if (cw > w[k]) w[k] = cw;
+                    int column = TabLayout.Column(k, cells.Count, count);
+                    if (cw > w[column]) w[column] = cw;
                 }
             }
             TabLayout tab = new TabLayout(w, Mathf.Round(c.Gap * TabGapFactor), size);
@@ -549,20 +551,25 @@ namespace SectionedTooltips
         private static float GridCells(Ctx c, Row row, TabLayout tab, float x, float y)
         {
             float h = LineH(c);
-            float edge = x;
             int n = row.Cells.Count;
+            if (tab.Width > c.W - c.Pad - x)
+            {
+                // 卡片有宽度上限。按单元格重组文字，让旧式 <pos> 也能在卡片内自然折行。
+                StringBuilder line = new StringBuilder();
+                for (int k = 0; k < n; k++)
+                {
+                    if (k > 0) line.Append(' ');
+                    line.Append(ValueInks(row.Cells[k]));
+                }
+                h = Mathf.Max(h, GridText(c, line.ToString(), tab.Size, x, y));
+                return y + h + RowGap(c);
+            }
             for (int k = 0; k < n; k++)
             {
-                bool last = k == n - 1;
-                int column = last && n < tab.Count ? tab.Count - 1 : k;
                 string rich = ValueInks(row.Cells[k]);
-                float w = c.Measure(rich, tab.Size);
-                float px = x + tab.Start(column);
-                if (px < edge) px = edge; // 格子比列宽时别压到前一格上
                 TextMeshProUGUI t = Text(c, tab.Size, rich, Color.white, 0f);
-                Ui.Move(t.rectTransform, px, y);
+                Ui.Move(t.rectTransform, x + tab.CellStart(k, n), y);
                 h = Mathf.Max(h, t.rectTransform.sizeDelta.y);
-                edge = px + w;
             }
             return y + h + RowGap(c);
         }
@@ -1040,7 +1047,7 @@ namespace SectionedTooltips
                         if ((module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
                         // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
                         // 否则单子不够宽，中文会在字中间断成两行。长句照旧折行，不撑宽单子。
-                        if (labelled && BarOf(row.Segs) == null) continue;
+                        if (!labelled && BarOf(row.Segs) == null) continue;
                         List<Row> parts = PipeParts(row);
                         if (parts != null) for (int k = 0; k < parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(parts[k].Value), size));
                         else value = Mathf.Max(value, GridRowWidth(c, row));
