@@ -185,6 +185,42 @@ namespace SectionedTooltips
         /// 列表里的名字最多这么多个字。
         private const int NameMax = 12;
 
+        /// <summary>
+        /// 行尾是一个带符号的百分比时，它前面的短名字当标签：“种子产量 +25%” → “种子产量”、“+25%”。
+        /// 没有冒号的行，靠这个变成正常的标签/数值行。
+        /// </summary>
+        internal static bool TrailingPercent(string plain, out string label, out string value)
+        {
+            label = value = null;
+            if (string.IsNullOrEmpty(plain)) return false;
+            int space = -1;
+            for (int i = plain.Length - 1; i >= 0; i--)
+            {
+                if (plain[i] == ' ' || plain[i] == TextUnits.IdeographicSpace) { space = i; break; }
+            }
+            if (space <= 0) return false;
+            string head = plain.Substring(0, space).Trim();
+            string tail = plain.Substring(space + 1).Trim();
+            if (!PlausibleName(head) || !SignedPercent(tail)) return false;
+            label = head;
+            value = tail;
+            return true;
+        }
+
+        /// “+25%”“-2.5%”这种带符号的百分比。
+        private static bool SignedPercent(string s)
+        {
+            if (s.Length < 3) return false;
+            if (s[0] != '+' && s[0] != '-' && s[0] != '\u2212') return false;
+            int i = 1, digits = 0;
+            while (i < s.Length - 1 && (char.IsDigit(s[i]) || s[i] == '.'))
+            {
+                if (char.IsDigit(s[i])) digits++;
+                i++;
+            }
+            return digits > 0 && i == s.Length - 1 && s[i] == '%';
+        }
+
         // ---------------------------------------------------------------- 标签
 
         /// <summary>末尾那组括号从哪里开始（“效率（电子元件（普通））” 得 2）；不是以括号结尾时返回 -1。</summary>

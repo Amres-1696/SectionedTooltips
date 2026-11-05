@@ -613,6 +613,25 @@ namespace SectionedTooltips
                 }
             }
 
+            // 没有冒号、但行尾是“+25%”这种：前面的短名字当标签（“种子产量 +25%”）。
+            if (split <= 0 && pairs)
+            {
+                string tailLabel, tailValue;
+                if (TextRules.TrailingPercent(l.Plain, out tailLabel, out tailValue))
+                {
+                    Row pr = new Row();
+                    pr.Label = new List<Seg>();
+                    Seg name = new Seg();
+                    name.Text = tailLabel;
+                    pr.Label.Add(name);
+                    pr.Value = new List<Seg>();
+                    Seg num = new Seg();
+                    num.Text = tailValue;
+                    pr.Value.Add(num);
+                    return pr;
+                }
+            }
+
             if (split > 0)
             {
                 List<Unit> label = TextUnits.TrimEnd(u.GetRange(0, split));

@@ -33,6 +33,7 @@ internal static class HeadlessTests
         Captions();
         ItemDetailsShapes();
         PercentLists();
+        TrailingPercents();
     }
 
     // ---------------------------------------------------------------- 用例
@@ -187,6 +188,19 @@ internal static class HeadlessTests
         // 行首的项目符号要去掉。
         pairs = TextRules.PercentPairs("-净水器 +0.77% 净水药片 +0.23%");
         Check(pairs != null && pairs[0][0] == "净水器", "去掉行首的 -");
+    }
+
+
+    /// 没有冒号、行尾是“+25%”的行，前面的短名字当标签。
+    private static void TrailingPercents()
+    {
+        string label, value;
+        Check(TextRules.TrailingPercent("种子产量 +25%", out label, out value) && label == "种子产量" && value == "+25%", "种子产量 +25%");
+        Check(TextRules.TrailingPercent("黑市溢价 -70%", out label, out value) && label == "黑市溢价", "负数也认");
+        Check(!TextRules.TrailingPercent("生长速度 -20%, 种子产量 -50%", out label, out value), "列表行不认");
+        Check(!TextRules.TrailingPercent("收获后仍会存活，并再次结果。 收获数量 -25%", out label, out value), "句子不认");
+        Check(!TextRules.TrailingPercent("复杂度：+2", out label, out value), "没有百分比不认");
+        Check(!TextRules.TrailingPercent("+25%", out label, out value), "只有百分比没有名字不认");
     }
 
     // ---------------------------------------------------------------- 工具
