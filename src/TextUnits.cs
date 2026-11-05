@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -279,6 +280,45 @@ namespace SectionedTooltips
         private static bool NoLineStart(string text)
         {
             return text != null && text.Length == 1 && NoStartChars.IndexOf(text[0]) >= 0;
+        }
+
+        /// <summary>
+        /// 按制表位把一行切成几格：全角空格、两个以上连续空格，或游戏的 &lt;pos=…&gt; 标签
+        /// （标签只当标记，不进正文）。少于两格时返回 null，表示这是一行普通文字。
+        /// </summary>
+        internal static List<List<Unit>> SplitCells(List<Unit> units)
+        {
+            List<List<Unit>> cells = new List<List<Unit>>();
+            int from = 0, i = 0;
+            bool any = false;
+            while (i < units.Count)
+            {
+                if (units[i].Tag && units[i].Text.StartsWith("<pos", StringComparison.Ordinal))
+                {
+                    if (i > from) cells.Add(TrimEnd(units.GetRange(from, i - from)));
+                    from = i + 1;
+                    i++;
+                    any = true;
+                    continue;
+                }
+                if (!units[i].Space || units[i].Tag) { i++; continue; }
+                int j = i;
+                bool wide = false;
+                while (j < units.Count && units[j].Space && !units[j].Tag)
+                {
+                    if (units[j].Text.Length == 1 && units[j].Text[0] == IdeographicSpace) wide = true;
+                    j++;
+                }
+                if (!wide && j - i < 2) { i = j; continue; } // 单个半角空格只是词间距
+                if (i > from) cells.Add(TrimEnd(units.GetRange(from, i - from)));
+                from = j;
+                i = j;
+                any = true;
+            }
+            if (!any) return null;
+            if (from < units.Count) cells.Add(TrimEnd(units.GetRange(from, units.Count - from)));
+            for (int k = cells.Count - 1; k >= 0; k--) if (cells[k].Count == 0) cells.RemoveAt(k);
+            return cells.Count >= 2 ? cells : null;
         }
 
         /// 把 units 还原成带样式的 segs，来自同一 seg 的相邻部分合并。

@@ -21,6 +21,7 @@ namespace SectionedTooltips
         public List<Seg> Label; // 普通行没有 Label
         public List<Seg> Value;
         public List<Seg> Segs;  // 整行文本，只有普通行有
+        public List<List<Seg>> Cells; // 按制表位分开的几列（见 TextUnits.SplitCells）；普通行没有
         public bool Heading;    // 只有“标签：”、后面没内容；Label 存去掉冒号的文字
         public int Ord = -1;    // 同 Line.Ord
         public bool IsPair { get { return Label != null && !Heading; } }
@@ -593,6 +594,22 @@ namespace SectionedTooltips
                     heading.Heading = true;
                     heading.Label = TextUnits.ToSegs(label, l.Segs);
                     return heading;
+                }
+            }
+
+            if (split < 0 && pairs)
+            {
+                // 制表位对齐的列：Item Details 的成分表写成“水　1915.0mL　95.75%”，把列对齐
+                // 交给显示方；更老的写法用 <pos=…> 定位。切几格交给估价单按列排，不然整行
+                // 只是一段自由文本，各行按名字长短错开，看着像一张参差不齐的表。
+                List<List<Unit>> cells = TextUnits.SplitCells(u);
+                if (cells != null)
+                {
+                    Row tab = new Row();
+                    tab.Segs = TextUnits.ToSegs(u, l.Segs); // 经典风格照旧整行输出
+                    tab.Cells = new List<List<Seg>>(cells.Count);
+                    for (int k = 0; k < cells.Count; k++) tab.Cells.Add(TextUnits.ToSegs(cells[k], l.Segs));
+                    return tab;
                 }
             }
 
