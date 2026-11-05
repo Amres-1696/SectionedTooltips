@@ -9,6 +9,10 @@ namespace SectionedTooltips
     /// </summary>
     internal static class Fuse
     {
+        /// <summary>排版和估价单各自的熔断键。</summary>
+        internal const string LayoutKey = "排版";
+        internal const string TicketKey = "估价单";
+
         private const int Limit = 3;
         private static readonly Dictionary<string, int> failures = new Dictionary<string, int>();
         private static readonly HashSet<string> open = new HashSet<string>();

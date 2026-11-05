@@ -31,6 +31,7 @@ internal static class HeadlessTests
         Fractions();
         Templates();
         Captions();
+        ItemDetailsShapes();
     }
 
     // ---------------------------------------------------------------- 用例
@@ -122,6 +123,34 @@ internal static class HeadlessTests
         Check(!TextRules.CaptionList("没有冒号"), "没有冒号不算");
         Check(!TextRules.CaptionList("这是一个特别长的说明句子：内容"), "说明太长不算");
         Check(!TextRules.CaptionList("数量 3：铁锭"), "说明里有数字不算");
+    }
+
+
+    /// 物品详情（Item Details 0.7.7）实际写出的几种文本，按它的 zh.csv 抄的。
+    private static void ItemDetailsShapes()
+    {
+        float a, b;
+        // hidden.durability “耐久度：{0}/{1}”：冒号拆列后数值就是纯分数
+        Check(TextRules.ReadFraction("311/400", true, "耐久度 ", "/", out a, out b) && b == 400f, "耐久度：311/400");
+
+        // inner.durability “{0}：耐久度 {1}/{2}”：按模板读
+        Check(TextRules.ReadFraction("耐久度 311/400", true, "耐久度 ", "/", out a, out b) && a == 311f, "滤水器：耐久度 311/400");
+
+        // inner.filters “{0} ×{1}：最低耐久度 {2}/{3}”：前缀不是模板，退回通用规则
+        Check(TextRules.ReadFraction("最低耐久度 311/400", true, "耐久度 ", "/", out a, out b) && a == 311f, "最低耐久度 311/400 退回通用规则");
+
+        // hidden.durability_faked “真实耐久度：{0}/{1}（显示 {2}/{3}）”
+        Check(TextRules.ReadFraction("311/400（显示 400/400）", true, "耐久度 ", "/", out a, out b) && b == 400f, "真实耐久度带括号注解");
+
+        // storage.contains “内含：A×2、B、C”
+        Check(TextRules.CaptionList("内含：铁锭×2、铜锭×1、塑料"), "内含清单");
+        Check(TextRules.CaptionList("Contains: iron x2, copper"), "英文内含清单");
+
+        // wine.composition “成分：糖度 {0}‰、污染物 {1}‰”
+        Check(TextRules.CaptionList("成分：糖度 12‰、污染物 3‰"), "成分清单");
+
+        // 带括号注解的耐久度行不是内容物清单，不能删
+        Check(!TextRules.CaptionList("真实耐久度：311/400（显示 400/400）"), "带括号的耐久度行不算清单");
     }
 
     // ---------------------------------------------------------------- 工具

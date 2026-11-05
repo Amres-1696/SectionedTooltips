@@ -51,6 +51,10 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/Overlay.cs` | 画在 tooltip 上的图标和进度条 |
 | `src/SettingsPanel.cs` | 设置面板补丁：滑块数值、色块、示例单 |
 | `src/TicketSample.cs` | 示例单和 Classic 示例 |
+| `src/ItemDetailsBridge.cs` | 和 Item Details 的对接：排版声明、tooltip 锚点 |
+| `src/TextRules.cs` | 纯文本规则（分数、模板、括号、清单），不引用游戏程序集 |
+| `src/Fuse.cs` | 连续失败熔断 |
+| `tests/` | 无头自检：`tests\test.bat` |
 | `Localization/*.csv` | 文案，目前中英两份 |
 
 `workshop/`（发布素材）和 `build.bat`（本地构建脚本）不进仓库。

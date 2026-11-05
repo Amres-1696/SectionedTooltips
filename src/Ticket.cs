@@ -90,8 +90,16 @@ namespace SectionedTooltips
         private static CanvasGroup faded;
         private static RectTransform fadedWin;
         private static readonly Vector3[] corners = new Vector3[4];
-        /// 估价单上次摆放的位置，Item Details 的标签出来后可以再摆一次。
-        private static RectTransform shownParent, shownWin;
+
+        /// 当前估价单的根；交给 Item Details 当 tooltip 锚点用，没显示时返回 null。
+        internal static RectTransform Card
+        {
+            get
+            {
+                return root != null && root.gameObject.activeSelf && card != null && card.gameObject.activeSelf
+                    ? card : null;
+            }
+        }
 
         internal static void Show(PixelWindow window, TMP_Text tmp, LayoutResult r, GameItemElement item)
         {
@@ -103,7 +111,7 @@ namespace SectionedTooltips
                 return;
             }
             // 连续建失败到上限就不再画，显示游戏自己的 tooltip。
-            if (Fuse.IsOpen(TicketFuse))
+            if (Fuse.IsOpen(Fuse.TicketKey))
             {
                 Hide();
                 return;
@@ -133,8 +141,6 @@ namespace SectionedTooltips
                     Build(tmp, r, item);
                 }
             }
-            shownParent = parent;
-            shownWin = win;
             Position(parent, win);
             Raise();
             Fade(win);
@@ -179,9 +185,6 @@ namespace SectionedTooltips
                 slips.Clear(); // 它们的卡片跟着旧根节点一起没了
                 spareTexts.Clear(); // 复用的文字也一样
                 fresh = true;
-                // 没有它估价单照样显示，只是 Item Details 的标签留在原地。
-                try { go.AddComponent<TicketFollow>(); }
-                catch (Exception e) { SectionedTooltipsMod.Error("ticket badge follow unavailable: " + e.Message); }
             }
             // 玩家的缩放设置叠在游戏自己的 UI 缩放上。
             Vector3 scale = win.localScale * Settings.ScaleFactor;
@@ -207,7 +210,7 @@ namespace SectionedTooltips
                 if (m.x > (bl.x + tr.x) / 2f) x = tr.x - w;
                 if (m.y < (bl.y + tr.y) / 2f) y = bl.y + h;
             }
-            // 估价单上方留给 Item Details 的标签，FollowBadge 会把它们挪到上边缘。
+            // 估价单上方留给 Item Details 的分类标签（它自己贴在锚点上方，这里只留高度）。
             float above = 0f;
             RectTransform badge = Badge();
             if (badge != null)
@@ -224,7 +227,8 @@ namespace SectionedTooltips
 
         // ---------------------------------------------------------------- Item Details 的分类标签
 
-        // Item Details 会把“[机器]”那行换成一排彩色标签，画在游戏 tooltip 窗口正上方。估价单比窗口高、会被推到屏幕内，就把它盖住了：所以让标签跟着估价单走，贴在它的上边缘，像贴在窗口上一样。按物体名字在窗口的兄弟节点里找，不反射进那个模组（那需要反射权限）。
+        // Item Details 会把“[机器]”那行换成一排彩色标签，画在锚点上方。我们把估价单的根注册成了
+        // tooltip_anchor，位置由它自己摆；这里只按名字找到它，量个高度给上方留出空间。
         private const string BadgeName = "ItemDetailsTypeBadge";
         private const float BadgeGap = 4f; // Item Details 在窗口上方留的间距，窗口单位
 
@@ -235,78 +239,10 @@ namespace SectionedTooltips
             return t != null && t.gameObject.activeInHierarchy ? t as RectTransform : null;
         }
 
-        // Item Details 0.7.6 会把箱子的内容物显示在游戏 tooltip 旁边的图标窗口里。本模组加载时它不再显示，除非是密封箱（密封箱的内容估价单不显示）；那个窗口也跟着估价单走。和标签一样按名字找。
-        private const string ContentsName = "ItemDetailsContentsGrid";
-
-        private static RectTransform ContentsWindow()
-        {
-            if (root == null || root.parent == null) return null;
-            Transform t = root.parent.Find(ContentsName);
-            return t != null && t.gameObject.activeInHierarchy ? t as RectTransform : null;
-        }
-
-        /// 把 Item Details 的标签放到估价单左上边缘，用那个模组自己的间距；它的内容物窗口放在估价单旁边（显示期间每帧）。
-        internal static void FollowBadge()
-        {
-            if (root == null || !root.gameObject.activeSelf) return;
-            RectTransform badge = Badge(), contents = ContentsWindow();
-            if (badge == null && contents == null) return;
-            float s = Mathf.Abs(root.lossyScale.y) / Settings.ScaleFactor; // 窗口的缩放，标签用的就是这个
-            if (s <= 0f) s = 1f;
-            if (badge != null)
-            {
-                // Item Details 可能在我们的 ShowTooltip 后置之后才建标签；知道高度了就把估价单再摆一次，免得晚一帧才跳。
-                if (shownParent != null && shownWin != null) Position(shownParent, shownWin);
-                Vector3 tl = root.position;
-                Rect b = badge.rect;
-                // 和 Item Details 贴在游戏窗口上一样，左边留一个单位。
-                Vector3 p = tl + new Vector3((1f + b.width * 0.5f) * s, (BadgeGap + b.height * 0.5f) * s, 0f);
-                p.z = tl.z;
-                badge.position = p;
-            }
-            if (contents != null) FollowContents(contents, s);
-            Raise(badge, contents);
-        }
-
-        /// Item Details 的内容物窗口放在估价单右边、顶部齐平；右边出屏时放左边。
-        private static void FollowContents(RectTransform contents, float s)
-        {
-            if (card == null || shownParent == null || shownWin == null) return;
-            card.GetWorldCorners(corners);
-            float left = corners[0].x, right = corners[2].x, top = corners[2].y;
-            contents.GetWorldCorners(corners);
-            float w = corners[2].x - corners[0].x;
-            Rect screen = Panels.ScreenRect(shownParent, shownWin);
-            float screenRight = shownParent.TransformPoint(new Vector3(screen.xMax, 0f, 0f)).x;
-            float gap = BadgeGap * s;
-            float x = right + gap;
-            if (x + w > screenRight) x = left - gap - w;
-            Vector3 p = contents.position;
-            contents.position = new Vector3(p.x + x - corners[1].x, p.y + top - corners[1].y, p.z);
-        }
-
+        /// 把估价单提到最上层。Item Details 的标签和内容物浮窗自己贴锚点，这里不再动它们。
         private static void Raise()
         {
-            Raise(Badge(), ContentsWindow());
-        }
-
-        /// 让估价单压住旁边的所有东西，Item Details 的标签和内容物窗口压在估价单上；顺序本来就对时不重排。
-        private static void Raise(RectTransform badge, RectTransform contents)
-        {
-            Transform p = root.parent;
-            int top = p.childCount - 1;
-            // 游戏每次 ShowTooltip 都把窗口提到最上层；它淡出了不挡东西，所以它下面就是顶层。
-            if (shownWin != null && shownWin.parent == p && shownWin.GetSiblingIndex() == top) top--;
-            if (badge != null && badge.parent != p) badge = null;
-            if (contents != null && contents.parent != p) contents = null;
-            int at = top - (badge != null ? 1 : 0) - (contents != null ? 1 : 0);
-            bool fine = root.GetSiblingIndex() == at;
-            if (fine && badge != null) fine = badge.GetSiblingIndex() == ++at;
-            if (fine && contents != null) fine = contents.GetSiblingIndex() == ++at;
-            if (fine) return;
-            root.SetAsLastSibling();
-            if (badge != null) badge.SetAsLastSibling();
-            if (contents != null) contents.SetAsLastSibling();
+            if (root != null) root.SetAsLastSibling();
         }
 
         // ---------------------------------------------------------------- 构建
@@ -532,15 +468,13 @@ namespace SectionedTooltips
         private static LayoutResult failedFor;
         private static GameItemElement failedItem;
 
-        private const string TicketFuse = "估价单";
-
         /// 构建估价单，失败就把画到一半的丢掉：半张卡片绝不能当成这个物品的成品显示（Show 会一直显示它，而且永远不会销毁）。
         private static void Build(TMP_Text tmp, LayoutResult r, GameItemElement item)
         {
             try
             {
                 BuildCard(tmp, r, item);
-                Fuse.Ok(TicketFuse);
+                Fuse.Ok(Fuse.TicketKey);
             }
             catch (Exception e)
             {
@@ -550,7 +484,7 @@ namespace SectionedTooltips
                 builtItem = null;
                 failedFor = r;
                 failedItem = item;
-                Fuse.Fail(TicketFuse, e);
+                Fuse.Fail(Fuse.TicketKey, e);
                 throw;
             }
         }
