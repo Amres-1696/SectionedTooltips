@@ -21,6 +21,7 @@ namespace SectionedTooltips
         public List<Seg> Label; // 普通行没有 Label
         public List<Seg> Value;
         public List<Seg> Segs;  // 整行文本，只有普通行有
+        public List<List<Seg>> Cells; // 按制表位分开的几列（见 TextUnits.SplitCells）；普通行没有
         public bool Heading;    // 只有“标签：”、后面没内容；Label 存去掉冒号的文字
         public int Ord = -1;    // 同 Line.Ord
         public bool IsPair { get { return Label != null && !Heading; } }
@@ -552,17 +553,28 @@ namespace SectionedTooltips
                 }
                 if (open >= 0 && close > open && wordy && close + 1 < u.Count) { split = close + 1; valueStart = close + 1; }
             }
+            bool hasBar = false;
             if (split < 0)
             {
                 // “能量 [=====   ] (76/100kJ)”：进度条前面的部分就是它的标签。
                 bool seenText = false;
                 for (int k = 0; k < u.Count; k++)
                 {
-                    if (l.Segs[u[k].Seg].Bar != null) { if (seenText) { split = k; valueStart = k; } break; }
+                    if (l.Segs[u[k].Seg].Bar != null)
+                    {
+                        hasBar = true;
+                        if (seenText) { split = k; valueStart = k; }
+                        break;
+                    }
                     if (!u[k].Tag && !u[k].Space) seenText = true;
                 }
             }
-            if (split < 0)
+            List<List<Unit>> cells = null;
+            if (split < 0 && pairs && Settings.IsTicket && !hasBar && l.Key != Sections.Value)
+                cells = TextUnits.SplitCells(u);
+
+            // 三列以上是表格；只有两格时仍优先认游戏的“标签    数值”。
+            if (split < 0 && (cells == null || cells.Count == 2))
             {
                 // 游戏用空格对齐的列：“标签    数值”。
                 bool seenText = false;
@@ -598,6 +610,11 @@ namespace SectionedTooltips
 
             Row r = new Row();
             r.Segs = TextUnits.ToSegs(u, l.Segs);
+            if (cells != null)
+            {
+                r.Cells = new List<List<Seg>>(cells.Count);
+                for (int k = 0; k < cells.Count; k++) r.Cells.Add(TextUnits.ToSegs(cells[k], l.Segs));
+            }
             return r;
         }
 

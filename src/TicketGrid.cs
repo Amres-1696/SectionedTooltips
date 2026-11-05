@@ -257,6 +257,7 @@ namespace SectionedTooltips
             float left = LabelX(c);
             bool module = bl.Key == Sections.Module, stats = false, affixes = false;
             bool labelled = Labelled(bl), strip = StripsBrackets(c, bl);
+            TabLayout tab = TabLayoutOf(c, bl);
             // 小标题（“升级：”、“模组效果：”）给它下面没有自己标签的行当标签。
             string pending = null;
             for (int i = 0; i < bl.Rows.Count; i++)
@@ -315,6 +316,14 @@ namespace SectionedTooltips
                 if (parts != null)
                 {
                     for (int k = 0; k < parts.Count; k++) y = GridPair(c, parts[k], null, false, y);
+                    continue;
+                }
+                if (row.Cells != null && tab != null)
+                {
+                    // 制表位行自己按列落位，不参与标签列。
+                    if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, "", y);
+                    pending = null;
+                    y = GridCells(c, row, tab, labelled ? ValueX(c) : left, y);
                     continue;
                 }
                 bool negative;
@@ -460,6 +469,111 @@ namespace SectionedTooltips
             BarMark bar = SplitBar(ref segs);
             return (bar != null ? BarW(c) + c.Gap : 0f) + c.Measure(ValueInks(segs), RowSize(c));
         }
+
+        // ---------------------------------------------------------------- 制表位
+
+        /// <summary>
+        /// 一节里制表位行的列几何：每列宽度、列间距、整表宽度，以及每列的起始 x。
+        /// 绘制和“这一节要占多宽”都读同一份，不会各算一套。
+        /// </summary>
+        private sealed class TabLayout
+        {
+            internal readonly float Size;
+            private readonly float[] start;
+            private readonly float width;
+
+            internal TabLayout(float[] columns, float gap, float size)
+            {
+                Size = size;
+                start = new float[columns.Length];
+                float x = 0f;
+                for (int k = 0; k < columns.Length; k++)
+                {
+                    if (k > 0) x += gap;
+                    start[k] = x;
+                    x += columns[k];
+                }
+                width = x;
+            }
+
+            internal float Width { get { return width; } }
+            internal static int Column(int cell, int cells, int columns)
+            {
+                return cell == cells - 1 ? columns - 1 : cell;
+            }
+
+            internal float CellStart(int cell, int cells) { return start[Column(cell, cells, start.Length)]; }
+        }
+
+        /// 两列之间的间距：全角空格在游戏的 tooltip 里本来就比半角格宽。
+        private const float TabGapFactor = 1.5f;
+
+        /// <summary>本节制表位行的列几何；本节没有多列行时返回 null。一次构建里只算一次。</summary>
+        private static TabLayout TabLayoutOf(Ctx c, Block bl)
+        {
+            TabLayout cached;
+            if (c.Tabs.TryGetValue(bl, out cached)) return cached;
+
+            int count = 0;
+            for (int i = 0; i < bl.Rows.Count; i++)
+            {
+                List<List<Seg>> cells = bl.Rows[i].Cells;
+                if (cells != null && cells.Count > count) count = cells.Count;
+            }
+            if (count < 2)
+            {
+                c.Tabs[bl] = null;
+                return null;
+            }
+
+            float size = RowSize(c);
+            float[] w = new float[count];
+            for (int i = 0; i < bl.Rows.Count; i++)
+            {
+                List<List<Seg>> cells = bl.Rows[i].Cells;
+                if (cells == null) continue;
+                for (int k = 0; k < cells.Count; k++)
+                {
+                    float cw = c.Measure(ValueInks(cells[k]), size);
+                    int column = TabLayout.Column(k, cells.Count, count);
+                    if (cw > w[column]) w[column] = cw;
+                }
+            }
+            TabLayout tab = new TabLayout(w, Mathf.Round(c.Gap * TabGapFactor), size);
+            c.Tabs[bl] = tab;
+            return tab;
+        }
+
+        /// <summary>
+        /// 一行按制表位画成几列。格数与列数相同时逐列左对齐；格数少于列数时，第一格贴第 0 列、
+        /// 末格贴最后一列——“按Ctrl展开杂质　2.98%”这种少一列的提示行，百分比因此仍落在百分比列。
+        /// </summary>
+        private static float GridCells(Ctx c, Row row, TabLayout tab, float x, float y)
+        {
+            float h = LineH(c);
+            int n = row.Cells.Count;
+            if (tab.Width > c.W - c.Pad - x)
+            {
+                // 卡片有宽度上限。按单元格重组文字，让旧式 <pos> 也能在卡片内自然折行。
+                StringBuilder line = new StringBuilder();
+                for (int k = 0; k < n; k++)
+                {
+                    if (k > 0) line.Append(' ');
+                    line.Append(ValueInks(row.Cells[k]));
+                }
+                h = Mathf.Max(h, GridText(c, line.ToString(), tab.Size, x, y));
+                return y + h + RowGap(c);
+            }
+            for (int k = 0; k < n; k++)
+            {
+                string rich = ValueInks(row.Cells[k]);
+                TextMeshProUGUI t = Text(c, tab.Size, rich, Color.white, 0f);
+                Ui.Move(t.rectTransform, x + tab.CellStart(k, n), y);
+                h = Mathf.Max(h, t.rectTransform.sizeDelta.y);
+            }
+            return y + h + RowGap(c);
+        }
+
 
         /// <summary>武器一节里的词条行（“+12 后坐力控制”“-6 人机工效”）：正号返回 false，负号返回 true，不是词条返回 false。</summary>
         private static bool AffixSign(Row row, out bool negative)
@@ -929,7 +1043,11 @@ namespace SectionedTooltips
                     if (!row.IsPair)
                     {
                         // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
-                        if (!labelled || (module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
+                        if (row.Cells != null) continue; // 制表位行按整表宽度算，见下面的 tab
+                        if ((module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
+                        // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
+                        // 否则单子不够宽，中文会在字中间断成两行。长句照旧折行，不撑宽单子。
+                        if (!labelled && BarOf(row.Segs) == null) continue;
                         List<Row> parts = PipeParts(row);
                         if (parts != null) for (int k = 0; k < parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(parts[k].Value), size));
                         else value = Mathf.Max(value, GridRowWidth(c, row));
@@ -947,6 +1065,8 @@ namespace SectionedTooltips
                     else value = Mathf.Max(value, GridPairWidth(c, bl, j, strip));
                 }
                 if (chip > 0f) value = Mathf.Max(value, said > 0f ? chip + c.Gap + said : chip);
+                TabLayout tab = TabLayoutOf(c, bl);
+                if (tab != null) value = Mathf.Max(value, tab.Width);
             }
             if (r.Contents != null)
                 for (int i = 0; i < r.Contents.Gauges.Count; i++) value = Mathf.Max(value, GaugeWidth(c, r.Contents.Gauges[i]));
