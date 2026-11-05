@@ -316,7 +316,10 @@ namespace SectionedTooltips
                     if (pending != null) pending = "";
                     continue;
                 }
-                y = GridRow(c, row, pending ?? "", labelled ? ValueX(c) : left, y);
+                // 带进度条的行跟着上面那条条的起点走（和数值列对齐）；其余的从标签列起，
+                // 免得“（另 3 项低于显示阈值）”这种说明缩到数值列去。
+                float rowX = labelled && BarOf(row.Segs) != null ? ValueX(c) : left;
+                y = GridRow(c, row, pending ?? "", rowX, y);
                 if (pending != null) pending = "";
             }
             if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, "", y);
