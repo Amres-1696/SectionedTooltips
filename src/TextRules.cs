@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace SectionedTooltips
 {
@@ -118,6 +119,45 @@ namespace SectionedTooltips
             if (end == 0) return false;
             return float.TryParse(s.Substring(0, end).Replace(",", ""), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out v);
+        }
+
+        // ---------------------------------------------------------------- 百分比列表
+
+        /// <summary>
+        /// 一行里排了好几组“名字 +N%”时拆成组：“海德拉科技微型净水器 +6.96% 紫外线灯 +1.34%” → 两组。
+        /// 整行必须正好由这些组成（前面有名字、后面没有多余文字），否则返回 null。
+        /// </summary>
+        internal static List<string[]> PercentPairs(string plain)
+        {
+            if (string.IsNullOrEmpty(plain)) return null;
+            List<int> starts = new List<int>(), ends = new List<int>();
+            for (int i = 0; i < plain.Length; i++)
+            {
+                char ch = plain[i];
+                if (ch != '+' && ch != '-' && ch != '\u2212') continue;
+                int j = i + 1, digits = 0;
+                while (j < plain.Length && (char.IsDigit(plain[j]) || plain[j] == '.'))
+                {
+                    if (char.IsDigit(plain[j])) digits++;
+                    j++;
+                }
+                if (digits == 0 || j >= plain.Length || plain[j] != '%') continue;
+                starts.Add(i);
+                ends.Add(j + 1);
+                i = j;
+            }
+            if (starts.Count < 2) return null;
+            List<string[]> pairs = new List<string[]>(starts.Count);
+            int from = 0;
+            for (int k = 0; k < starts.Count; k++)
+            {
+                string name = plain.Substring(from, starts[k] - from).Trim();
+                if (name.Length == 0) return null;
+                pairs.Add(new string[] { name, plain.Substring(starts[k], ends[k] - starts[k]) });
+                from = ends[k];
+            }
+            if (plain.Substring(from).Trim().Length > 0) return null;
+            return pairs;
         }
 
         // ---------------------------------------------------------------- 标签

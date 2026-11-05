@@ -25,6 +25,8 @@ namespace SectionedTooltips
         public bool Heading;    // 只有“标签：”、后面没内容；Label 存去掉冒号的文字
         public int Ord = -1;    // 同 Line.Ord
         public bool IsPair { get { return Label != null && !Heading; } }
+        /// 名字不占标签列、自己撑满一行（“名字 …… +6.96%”那种列表）。
+        public bool Wide;
     }
 
     internal sealed class Block
@@ -482,6 +484,15 @@ namespace SectionedTooltips
             for (int i = 0; i < lines.Count; i++)
             {
                 Line l = lines[i];
+                // 一行里塞了好几组“名字 +N%”：拆成每组一行，名字靠左、百分比右对齐。
+                List<string[]> pairs = PercentRows(l);
+                if (pairs != null)
+                {
+                    string pk = l.Key == Sections.Dev ? Sections.Info : l.Key;
+                    if (cur == null || cur.Key != pk) { cur = new Block(); cur.Key = pk; blocks.Add(cur); }
+                    for (int j = 0; j < pairs.Count; j++) cur.Rows.Add(PairRow(pairs[j], l.Ord));
+                    continue;
+                }
                 // 模组的状态和词条是句子，不是“标签: 数值”：词条描述里的冒号会被切成两半。
                 Row row = MakeRow(l, maxLabel, l.Key != Sections.Module);
                 string key = l.Key;
@@ -503,6 +514,30 @@ namespace SectionedTooltips
         }
 
         // ---------------------------------------------------------------- 标签和数值拆列
+
+        /// 这一行要不要拆成多组“名字 +N%”；标题、描述、价格、标签行不拆。
+        private static List<string[]> PercentRows(Line l)
+        {
+            string key = l.Key;
+            if (key == Sections.Title || key == Sections.Desc || key == Sections.Value || key == Sections.Label) return null;
+            return TextRules.PercentPairs(l.Plain);
+        }
+
+        private static Row PairRow(string[] pair, int ord)
+        {
+            Row r = new Row();
+            r.Wide = true;
+            r.Ord = ord;
+            r.Label = new List<Seg>();
+            Seg label = new Seg();
+            label.Text = pair[0];
+            r.Label.Add(label);
+            r.Value = new List<Seg>();
+            Seg value = new Seg();
+            value.Text = pair[1];
+            r.Value.Add(value);
+            return r;
+        }
 
         private static Row Plain(Line l)
         {

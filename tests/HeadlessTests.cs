@@ -32,6 +32,7 @@ internal static class HeadlessTests
         Templates();
         Captions();
         ItemDetailsShapes();
+        PercentLists();
     }
 
     // ---------------------------------------------------------------- 用例
@@ -160,6 +161,24 @@ internal static class HeadlessTests
 
         // 带括号注解的耐久度行不是内容物清单，不能删
         Check(!TextRules.CaptionList("真实耐久度：311/400（显示 400/400）"), "带括号的耐久度行不算清单");
+    }
+
+
+    /// 一行里好几组“名字 +N%”时应当拆成多行，名字靠左、百分比右对齐。
+    private static void PercentLists()
+    {
+        List<string[]> pairs = TextRules.PercentPairs("海德拉科技微型净水器 +6.96% 紫外线灯 +1.34% 滤水器 +1.03%");
+        Check(pairs != null && pairs.Count == 3, "拆出三组，实际 " + (pairs == null ? 0 : pairs.Count));
+        Check(pairs != null && pairs[0][0] == "海德拉科技微型净水器" && pairs[0][1] == "+6.96%", "第一组是名字加百分比");
+        Check(pairs != null && pairs[2][0] == "滤水器" && pairs[2][1] == "+1.03%", "最后一组也对");
+
+        pairs = TextRules.PercentPairs("净水器 +0.77% 净水药片 +0.23%");
+        Check(pairs != null && pairs.Count == 2 && pairs[1][0] == "净水药片", "两组也能拆");
+
+        Check(TextRules.PercentPairs("破旧 -75%") == null, "只有一组不拆");
+        Check(TextRules.PercentPairs("每次使用 +5% 速度 +2% 的加成") == null, "后面还有别的字不拆");
+        Check(TextRules.PercentPairs("+5% +2%") == null, "没有名字不拆");
+        Check(TextRules.PercentPairs("没有百分比") == null, "没有百分比不拆");
     }
 
     // ---------------------------------------------------------------- 工具

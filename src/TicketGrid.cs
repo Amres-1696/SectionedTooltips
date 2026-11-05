@@ -287,6 +287,7 @@ namespace SectionedTooltips
                     // 有自己标签的行上面的小标题单独占一行。
                     if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, "", y);
                     pending = null;
+                    if (row.Wide) { y = ModifierRow(c, row, y); continue; }
                     Row reading = Reading(bl, i);
                     y = GridPair(c, row, reading, strip, y);
                     if (reading != null) i++;
@@ -334,6 +335,20 @@ namespace SectionedTooltips
             float h = Mathf.Max(LineH(c), GridLabel(c, label, y));
             h = Mathf.Max(h, GridText(c, value, RowSize(c), ValueX(c), y));
             return y + h + RowGap(c);
+        }
+
+        /// 名字靠左，百分比右对齐到单子右边；名字太长就在数值左边折行。
+        private static float ModifierRow(Ctx c, Row row, float y)
+        {
+            float size = RowSize(c), lh = LineH(c);
+            float right = c.W - c.Pad;
+            TextMeshProUGUI value = Text(c, size, InkRich(row.Value, Ink), Color.white, 0f);
+            Vector2 vs = value.rectTransform.sizeDelta;
+            Ui.Move(value.rectTransform, right - vs.x, y);
+            float room = right - vs.x - c.Gap - LabelX(c);
+            float h = Mathf.Max(lh, GridText(c, InkRich(row.Label, InkSoft, false), size, LabelX(c), y,
+                LabelX(c) + Mathf.Max(room, size)));
+            return y + Mathf.Max(h, vs.y) + RowGap(c);
         }
 
         /// “标签  数值”，有进度条就从数值列开头画。reading（下面那条只有读数的行）把它的进度条和读数放到这一行，在数值前面。
@@ -987,6 +1002,7 @@ namespace SectionedTooltips
                     if (row.Heading) w = Mathf.Max(w, c.Measure(InkRich(row.Label, InkSoft, false), size));
                     else if (row.IsPair)
                     {
+                        if (row.Wide) continue;
                         Upgrade u = UpgradeOf(row);
                         string note;
                         if (u != null) w = Mathf.Max(w, c.Measure(u.Name, size));
@@ -1020,6 +1036,12 @@ namespace SectionedTooltips
                 {
                     Row row = bl.Rows[j];
                     if (row.Heading) continue;
+                    if (row.Wide)
+                    {
+                        value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft, false), size)
+                            + c.Gap + c.Measure(InkRich(row.Value, Ink), size));
+                        continue;
+                    }
                     if (!row.IsPair)
                     {
                         // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
