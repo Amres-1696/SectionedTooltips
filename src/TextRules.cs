@@ -160,43 +160,6 @@ namespace SectionedTooltips
             return pairs;
         }
 
-        // ---------------------------------------------------------------- 提示行
-
-        // 游戏把展开提示和真正的数据拼在同一行：“按Ctrl展开杂质　1.00%”。
-        // 提示词按语言列出来，命中就把提示切出去、数据单独成行。
-        private static readonly string[] HintVerbs = { "展开", "收起", "expand", "collapse" };
-
-        /// <summary>
-        /// “按Ctrl展开杂质　1.00%” → 提示“按Ctrl展开”、名字“杂质”、数值“1.00%”。
-        /// 分隔符是制表位（一个全角空格或两个半角空格），提示词后面必须还有名字，否则不算。
-        /// </summary>
-        internal static bool HintPair(string plain, out string hint, out string label, out string value)
-        {
-            hint = label = value = null;
-            if (string.IsNullOrEmpty(plain)) return false;
-            int sep = plain.LastIndexOf(TextUnits.IdeographicSpace);
-            if (sep <= 0)
-            {
-                sep = plain.IndexOf("  ", StringComparison.Ordinal);
-                if (sep <= 0) return false;
-            }
-            string before = plain.Substring(0, sep).TrimEnd();
-            string after = plain.Substring(sep + 1).Trim();
-            if (before.Length == 0 || after.Length == 0) return false;
-            for (int i = 0; i < HintVerbs.Length; i++)
-            {
-                int at = before.IndexOf(HintVerbs[i], StringComparison.OrdinalIgnoreCase);
-                if (at <= 0) continue;
-                string rest = before.Substring(at + HintVerbs[i].Length).Trim();
-                if (rest.Length == 0) continue;
-                hint = before.Substring(0, at + HintVerbs[i].Length);
-                label = rest;
-                value = after;
-                return true;
-            }
-            return false;
-        }
-
         // ---------------------------------------------------------------- 标签
 
         /// <summary>末尾那组括号从哪里开始（“效率（电子元件（普通））” 得 2）；不是以括号结尾时返回 -1。</summary>

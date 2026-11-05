@@ -33,7 +33,6 @@ internal static class HeadlessTests
         Captions();
         ItemDetailsShapes();
         PercentLists();
-        HintLines();
     }
 
     // ---------------------------------------------------------------- 用例
@@ -180,24 +179,6 @@ internal static class HeadlessTests
         Check(TextRules.PercentPairs("每次使用 +5% 速度 +2% 的加成") == null, "后面还有别的字不拆");
         Check(TextRules.PercentPairs("+5% +2%") == null, "没有名字不拆");
         Check(TextRules.PercentPairs("没有百分比") == null, "没有百分比不拆");
-    }
-
-
-    /// “按Ctrl展开杂质　1.00%”：提示和数数据要分开。
-    private static void HintLines()
-    {
-        string hint, label, value;
-        bool ok = TextRules.HintPair("按Ctrl展开杂质　1.00%", out hint, out label, out value);
-        Check(ok && hint == "按Ctrl展开" && label == "杂质" && value == "1.00%", "中文提示行：" + hint + "/" + label + "/" + value);
-
-        ok = TextRules.HintPair("Ctrl to expand impurities  1.00%", out hint, out label, out value);
-        Check(ok && hint == "Ctrl to expand" && label == "impurities", "英文提示行：" + hint + "/" + label);
-
-        ok = TextRules.HintPair("水　7.54L　99.00%", out hint, out label, out value);
-        Check(!ok, "普通数据行不算提示");
-
-        ok = TextRules.HintPair("按Ctrl展开　1.00%", out hint, out label, out value);
-        Check(!ok, "提示后面没有名字不算");
     }
 
     // ---------------------------------------------------------------- 工具

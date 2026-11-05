@@ -484,17 +484,6 @@ namespace SectionedTooltips
             for (int i = 0; i < lines.Count; i++)
             {
                 Line l = lines[i];
-                // “按Ctrl展开杂质　1.00%”：提示单独一行放在数据下面。
-                string hint, hintLabel, hintValue;
-                if ((l.Key == Sections.Mods || l.Key == Sections.Info)
-                    && TextRules.HintPair(l.Plain, out hint, out hintLabel, out hintValue))
-                {
-                    string hk = l.Key == Sections.Dev ? Sections.Info : l.Key;
-                    if (cur == null || cur.Key != hk) { cur = new Block(); cur.Key = hk; blocks.Add(cur); }
-                    cur.Rows.Add(PairRow(new string[] { hintLabel, hintValue }, l.Ord));
-                    cur.Rows.Add(PairRow(new string[] { hint, "" }, l.Ord));
-                    continue;
-                }
                 // 一行里塞了好几组“名字 +N%”：拆成每组一行，名字靠左、百分比右对齐。
                 List<string[]> pairs = PercentRows(l);
                 if (pairs != null)
