@@ -603,15 +603,16 @@ namespace SectionedTooltips
 
         private const int FractionBarCells = 8;
 
-        /// “400/400”、“3 / 5”、“20.23/12 kg”：纯分数的数值在前面加一条进度条，按装满程度上色。数字还是那些，没多显示什么。
+        /// “400/400”、“3 / 5”、“20.23/12 kg”：分数的数值在前面加一条进度条，按装满程度上色。数字还是那些，没多显示什么。
         private static void AddFractionBar(Row pair, string value)
         {
             if (Settings.Bars != null && !Settings.Bars.Value) return;
             if (Settings.FractionBars != null && !Settings.FractionBars.Value) return;
             for (int i = 0; i < pair.Value.Count; i++) if (pair.Value[i].Bar != null) return;
 
+            string fraction = FractionPart(value);
             float a, b;
-            if (!ParseFraction(value, out a, out b) || b <= 0f) return;
+            if (fraction == null || !ParseFraction(fraction, out a, out b) || b <= 0f) return;
             float ratio = a / b;
 
             BarMark m = new BarMark();
@@ -626,6 +627,32 @@ namespace SectionedTooltips
             gap.Text = TextUnits.Pad(TextUnits.Cell);
             pair.Value.Insert(0, gap);
             pair.Value.Insert(0, bar);
+        }
+
+        /// <summary>
+        /// value 里能画条的那段分数：整段是分数就用整段；“耐久度 311/400（已耗尽，不再过滤）”只取“311/400”。
+        /// 前面的短词不含数字，末尾只去掉一组括号；取不到返回 null。
+        /// </summary>
+        private static string FractionPart(string value)
+        {
+            string s = (value ?? "").Trim();
+            float a, b;
+            if (ParseFraction(s, out a, out b)) return s;
+
+            // 末尾的括号注解不属于分数。
+            if (s.Length > 1 && (s[s.Length - 1] == '）' || s[s.Length - 1] == ')'))
+            {
+                int open = s.LastIndexOfAny(new char[] { '（', '(' });
+                if (open > 0) s = s.Substring(0, open).TrimEnd();
+                if (ParseFraction(s, out a, out b)) return s;
+            }
+
+            // “耐久度 311/400”：空格前是不含数字的短词，分数在后面。
+            int space = s.IndexOfAny(new char[] { ' ', TextUnits.IdeographicSpace });
+            if (space <= 0 || space > 6) return null;
+            for (int i = 0; i < space; i++) if (char.IsDigit(s[i])) return null;
+            string tail = s.Substring(space + 1).Trim();
+            return ParseFraction(tail, out a, out b) ? tail : null;
         }
 
         /// “a/b”，两个数字后面可以带单位；别的都不算。
