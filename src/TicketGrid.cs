@@ -317,6 +317,14 @@ namespace SectionedTooltips
                     for (int k = 0; k < parts.Count; k++) y = GridPair(c, parts[k], null, false, y);
                     continue;
                 }
+                bool negative;
+                if (bl.Key == Sections.Weapon && AffixSign(row, out negative))
+                {
+                    // 枪械词条：正号垫浅绿、负号垫浅红，一眼分得出哪条是好的。
+                    y = WeaponAffix(c, row, negative, labelled ? ValueX(c) : left, y);
+                    if (pending != null) pending = "";
+                    continue;
+                }
                 y = GridRow(c, row, pending ?? "", labelled ? ValueX(c) : left, y);
                 if (pending != null) pending = "";
             }
@@ -451,6 +459,40 @@ namespace SectionedTooltips
             List<Seg> segs = row.Segs;
             BarMark bar = SplitBar(ref segs);
             return (bar != null ? BarW(c) + c.Gap : 0f) + c.Measure(ValueInks(segs), RowSize(c));
+        }
+
+        /// <summary>武器一节里的词条行（“+12 后坐力控制”“-6 人机工效”）：正号返回 false，负号返回 true，不是词条返回 false。</summary>
+        private static bool AffixSign(Row row, out bool negative)
+        {
+            negative = false;
+            if (row.IsPair || row.Heading || row.Segs == null) return false;
+            string s = PlainOf(row.Segs).Trim();
+            if (s.Length < 2) return false;
+            if (s[0] == '+') return s[1] == '.' || char.IsDigit(s[1]);
+            if (s[0] != '-' && s[0] != '−') return false;
+            negative = true;
+            return s[1] == '.' || char.IsDigit(s[1]);
+        }
+
+        /// <summary>一条武器词条，垫一层浅绿（正）或浅红（负）的底，文字沿用数值的墨色。返回底部。</summary>
+        private static float WeaponAffix(Ctx c, Row row, bool negative, float x, float y)
+        {
+            float lh = LineH(c), size = RowSize(c);
+            List<Seg> segs = row.Segs;
+            BarMark bar = SplitBar(ref segs);
+            if (bar != null)
+            {
+                Meter(c, bar.Ratio, InkOf(bar.Color, Ink), x, y, BarW(c), lh);
+                x += BarW(c) + c.Gap;
+            }
+            float px = 3f * c.U;
+            string rich = ValueInks(segs);
+            float w = Mathf.Min(c.Measure(rich, size), c.W - c.Pad - x - 2f * px);
+            Color wash, ink;
+            Wash(negative ? BadHue : GoodHue, out wash, out ink);
+            Solid(c, wash, x - px, y, w + 2f * px, lh);
+            float h = Mathf.Max(lh, GridText(c, rich, size, x, y));
+            return y + h + RowGap(c);
         }
 
         /// “精工扩舱 0/12 | 养殖区 12x8 | 剩余升级次数：12”拆成标签/数值行；拆不开返回 null。
