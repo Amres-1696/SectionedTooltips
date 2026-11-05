@@ -152,13 +152,38 @@ namespace SectionedTooltips
             for (int k = 0; k < starts.Count; k++)
             {
                 string name = plain.Substring(from, starts[k] - from).Trim();
-                if (name.Length == 0) return null;
+                if (k == 0) name = StripBullet(name);
+                if (!PlausibleName(name)) return null;
                 pairs.Add(new string[] { name, plain.Substring(starts[k], ends[k] - starts[k]) });
                 from = ends[k];
             }
             if (plain.Substring(from).Trim().Length > 0) return null;
             return pairs;
         }
+
+        /// 名字不能太长、也不能带句子标点，否则这行是在切一句话，不是在切列表。
+        private static bool PlausibleName(string name)
+        {
+            if (name.Length == 0 || name.Length > NameMax) return false;
+            for (int i = 0; i < name.Length; i++)
+            {
+                char ch = name[i];
+                if ("。，、；：！？,;:!?".IndexOf(ch) >= 0) return false;
+            }
+            return true;
+        }
+
+        /// 去掉行首的项目符号（“-多年生” → “多年生”）。
+        private static string StripBullet(string s)
+        {
+            if (s.Length < 2) return s;
+            char ch = s[0];
+            if (ch != '-' && ch != '*' && ch != '•' && ch != '·' && ch != '>') return s;
+            return s.Substring(1).TrimStart();
+        }
+
+        /// 列表里的名字最多这么多个字。
+        private const int NameMax = 12;
 
         // ---------------------------------------------------------------- 标签
 

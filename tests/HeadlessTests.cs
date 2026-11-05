@@ -179,6 +179,14 @@ internal static class HeadlessTests
         Check(TextRules.PercentPairs("每次使用 +5% 速度 +2% 的加成") == null, "后面还有别的字不拆");
         Check(TextRules.PercentPairs("+5% +2%") == null, "没有名字不拆");
         Check(TextRules.PercentPairs("没有百分比") == null, "没有百分比不拆");
+
+        // 种子词条那种一整句里夹了三个百分比的，是句子不是列表，不能拆。
+        Check(TextRules.PercentPairs("多年生（固有）: 收获后仍会存活，并再次结果。 收获数量 -25%, 生长速度 -20%, 种子产量 -50%") == null,
+            "带句子标点的长行不拆");
+
+        // 行首的项目符号要去掉。
+        pairs = TextRules.PercentPairs("-净水器 +0.77% 净水药片 +0.23%");
+        Check(pairs != null && pairs[0][0] == "净水器", "去掉行首的 -");
     }
 
     // ---------------------------------------------------------------- 工具
