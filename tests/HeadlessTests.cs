@@ -59,6 +59,15 @@ internal static class HeadlessTests
         Check(lines.Count >= 2, "英文按空格折行，实际 " + lines.Count);
         Check(TextUnits.Plain(lines[0]).Trim().Length > 0, "第一行不为空");
 
+        // 中文里夹着空格分隔的条目时，优先在空格处断，别把“紫外线灯”拆开。
+        lines = TextUnits.Wrap(Units("海德拉科技微型净水器 +6.96% 紫外线灯 +1.34% 滤水器 +1.03%"), 370, 370);
+        Check(TextUnits.Plain(lines[0]) == "海德拉科技微型净水器 +6.96%", "在空格处断行，实际第一行：" + TextUnits.Plain(lines[0]));
+        Check(TextUnits.Plain(lines[1]).StartsWith("紫外线灯", StringComparison.Ordinal), "名字没有被拆开");
+
+        // 纯中文没有空格时仍然到处都能断。
+        lines = TextUnits.Wrap(Units("中文中文中文中文中文"), 4 * TextUnits.Cell, 4 * TextUnits.Cell);
+        Check(lines.Count == 5, "纯中文仍按宽度断，实际 " + lines.Count);
+
         // 收尾标点不能落在行首：。会被带到下一行，和它前面那个字一起。
         lines = TextUnits.Wrap(Units("中文。中文"), 4 * TextUnits.Cell, 4 * TextUnits.Cell);
         bool noneStartsWithStop = true;

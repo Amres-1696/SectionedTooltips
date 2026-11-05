@@ -219,6 +219,7 @@ namespace SectionedTooltips
             int w = 0;
             int limit = firstWidth < 1 ? 1 : firstWidth;
             int lastBreak = -1; // 断行时 cur[0..lastBreak] 可以留在这一行
+            int lastSpace = -1; // 最近一个空格的位置，优先在这里断
 
             for (int i = 0; i < units.Count; i++)
             {
@@ -234,13 +235,19 @@ namespace SectionedTooltips
                         w = 0;
                         limit = contWidth < 1 ? 1 : contWidth;
                         lastBreak = -1;
+                        lastSpace = -1;
                         continue;
                     }
                     List<Unit> carry = new List<Unit>();
-                    if (!u.Wide && lastBreak >= 0 && lastBreak < cur.Count - 1)
+                    // 优先在空格处断：中文哪里都能断，但“紫外线灯”这种名字被拆开很难看。
+                    // 只在空格离断点不远时才回退，免得把一大段都推到下一行。
+                    int cut = -1;
+                    if (lastSpace >= 0 && lastSpace < cur.Count - 1 && cur.Count - lastSpace - 1 <= MaxCarry) cut = lastSpace;
+                    else if (!u.Wide && lastBreak >= 0 && lastBreak < cur.Count - 1) cut = lastBreak;
+                    if (cut >= 0)
                     {
-                        carry = cur.GetRange(lastBreak + 1, cur.Count - lastBreak - 1);
-                        cur.RemoveRange(lastBreak + 1, cur.Count - lastBreak - 1);
+                        carry = cur.GetRange(cut + 1, cur.Count - cut - 1);
+                        cur.RemoveRange(cut + 1, cur.Count - cut - 1);
                     }
                     // 收尾标点不能放在行首：把它前面那个字符一起带下来。
                     Unit next = u;
@@ -265,15 +272,20 @@ namespace SectionedTooltips
                     w = Width(cur);
                     limit = contWidth < 1 ? 1 : contWidth;
                     lastBreak = -1;
+                    lastSpace = -1;
                 }
 
                 cur.Add(u);
                 w += u.Width;
+                if (u.Space) lastSpace = cur.Count - 1;
                 if (u.Space || u.Wide) lastBreak = cur.Count - 1;
             }
             if (cur.Count > 0 || lines.Count == 0) lines.Add(TrimEnd(cur));
             return lines;
         }
+
+        /// 回退到空格断行时，最多把这么多个字符带到下一行。
+        private const int MaxCarry = 12;
 
         private const string NoStartChars = "。，、；：！？）》」』】〕…—～％,.;:!?)]}%";
 
