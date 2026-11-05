@@ -929,7 +929,10 @@ namespace SectionedTooltips
                     if (!row.IsPair)
                     {
                         // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
-                        if (!labelled || (module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
+                        if ((module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
+                        // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
+                        // 否则单子不够宽，中文会在字中间断成两行。长句照旧折行，不撑宽单子。
+                        if (labelled && BarOf(row.Segs) == null) continue;
                         List<Row> parts = PipeParts(row);
                         if (parts != null) for (int k = 0; k < parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(parts[k].Value), size));
                         else value = Mathf.Max(value, GridRowWidth(c, row));
