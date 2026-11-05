@@ -327,6 +327,8 @@ namespace SectionedTooltips
             public bool TagWash = true;     // 标签底下垫一层淡色，还是只给文字上色
             public float W;      // 卡片宽度
             public float LabelCol; // 各节的标签列（见 TicketGrid）
+            /// 各节的制表位列几何（见 TicketGrid.TabLayoutOf）；一次构建里算一次，绘制与宽度共用。
+            public readonly Dictionary<Block, Ticket.TabLayout> Tabs = new Dictionary<Block, Ticket.TabLayout>();
             public float Px = 1f;  // 每个卡片单位占多少屏幕像素，图标要对齐整像素（见 PixelFit）
             public float Inner { get { return W - 2f * Pad; } }
             /// 卡片上的实心矩形，合成一个 mesh，画在纸上面、所有文字和图标下面。
