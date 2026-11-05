@@ -304,7 +304,7 @@ namespace SectionedTooltips
                     // 制表位行自己按列落位，不参与标签列。
                     if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, "", y);
                     pending = null;
-                    y = GridCells(c, row, tab, labelled ? ValueX(c) : left, y);
+                    y = GridCells(c, row, tab, left, y);
                     continue;
                 }
                 bool negative;
@@ -1024,7 +1024,7 @@ namespace SectionedTooltips
         /// 网格需要的单子宽度：标签列，加上最宽的一行数值（进度条、格子、标签、量条）。
         private static float GridWidth(Ctx c, LayoutResult r)
         {
-            float value = 0f, size = RowSize(c);
+            float value = 0f, size = RowSize(c), tabs = 0f;
             for (int i = 0; i < r.Blocks.Count; i++)
             {
                 Block bl = r.Blocks[i];
@@ -1068,11 +1068,16 @@ namespace SectionedTooltips
                 }
                 if (chip > 0f) value = Mathf.Max(value, said > 0f ? chip + c.Gap + said : chip);
                 TabLayout tab = TabLayoutOf(c, bl);
-                if (tab != null) value = Mathf.Max(value, tab.Width);
+                if (tab != null)
+                {
+                    value = Mathf.Max(value, tab.Width);
+                    if (tab.Width > tabs) tabs = tab.Width;
+                }
             }
             if (r.Contents != null)
                 for (int i = 0; i < r.Contents.Gauges.Count; i++) value = Mathf.Max(value, GaugeWidth(c, r.Contents.Gauges[i]));
-            return ValueX(c) - c.Pad + value;
+            // 制表位行从标签列起画，所以它要的宽度和数值列那套分开算。
+            return Mathf.Max(ValueX(c) - c.Pad + value, LabelX(c) - c.Pad + tabs);
         }
     }
 }
