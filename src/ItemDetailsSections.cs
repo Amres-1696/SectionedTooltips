@@ -180,6 +180,15 @@ namespace SectionedTooltips
             for (int i = 0; i < runs.Count; i++)
             {
                 string kind = runs[i].Item1, text = runs[i].Item2;
+                // bar / inline-bar 也是整行：文本 + 条 + 后缀，收完就断行。
+                if (kind == "bar" || kind == "inline-bar")
+                {
+                    if (!string.IsNullOrEmpty(text)) line.Append(text);
+                    string tail = runs[i].Item7;
+                    if (!string.IsNullOrEmpty(tail)) line.Append(tail);
+                    Put(result, id, line);
+                    continue;
+                }
                 // kind == "line"：整个 run 就是一行，文本在它自己身上，要先收再断行。
                 if (string.IsNullOrEmpty(text))
                 {

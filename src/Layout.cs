@@ -563,6 +563,14 @@ namespace SectionedTooltips
             }
         }
 
+        /// 这一对的值里已经有进度条（分数自动补的）。
+        private static bool HasFractionBar(Row row)
+        {
+            if (row.Value == null) return false;
+            for (int i = 0; i < row.Value.Count; i++) if (row.Value[i].Bar != null) return true;
+            return false;
+        }
+
         private static List<Block> Group(List<Line> lines)
         {
             // 宽度设置是给经典风格用的；估价单自己决定换行，这里保持默认值。
@@ -587,6 +595,14 @@ namespace SectionedTooltips
                 if (key == Sections.Dev) key = Sections.Info;
                 // 写在价格旁边的标记（“已上锁”之类）放在名字下面更好读。
                 if (key == Sections.Value && !row.IsPair) key = Sections.Title;
+                // “[标签] 耐久度 0/400”这种：标签行里带分数，当名字下面的文字画不出来进度条，
+                // 挪到“状态”当普通的一对，和别的分数一样出条。
+                if (key == Sections.Label && row.IsPair && HasFractionBar(row))
+                {
+                    if (cur == null || cur.Key != Sections.Condition) { cur = new Block(); cur.Key = Sections.Condition; blocks.Add(cur); }
+                    cur.Rows.Add(row);
+                    continue;
+                }
                 if (key == Sections.Title || key == Sections.Desc) row = Plain(l);
                 row.Ord = l.Ord;
 

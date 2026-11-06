@@ -262,6 +262,8 @@ namespace SectionedTooltips
                 }
                 if (row.Heading)
                 {
+                    if (module && Settings.Debug != null && Settings.Debug.Value)
+                        SectionedTooltipsMod.Log(string.Format("模块节：标签列 {0:F0}px，值列 {1:F0}px，小标题「{2}」", c.LabelCol, ValueX(c), PlainOf(row.Label).Trim()));
                     if (pending != null) y = GridLine(c, pending, "", y);
                     pending = InkRich(row.Label, InkSoft, false);
                     continue;
