@@ -1010,7 +1010,7 @@ namespace SectionedTooltips
                         Upgrade u = UpgradeOf(row);
                         string note;
                         if (u != null) w = Mathf.Max(w, c.Measure(u.Name, size));
-                        else if (!(module && EffectOf(row) != null)) w = Mathf.Max(w, c.Measure(PairLabel(c, row, strip, out note), size));
+                        else w = Mathf.Max(w, c.Measure(PairLabel(c, row, strip, out note), size));
                     }
                     else
                     {
@@ -1060,7 +1060,7 @@ namespace SectionedTooltips
                         continue;
                     }
                     Upgrade u = UpgradeOf(row);
-                    Effect e = u == null && module ? EffectOf(row) : null;
+                    Effect e = u == null ? EffectOf(row) : null;
                     if (u != null) value = Mathf.Max(value, UpgradeWidth(c, u));
                     else if (e != null)
                     {
