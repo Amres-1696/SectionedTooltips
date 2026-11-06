@@ -490,13 +490,32 @@ namespace SectionedTooltips
                 foreach (string id in sections.Values) if (ids.ToString().IndexOf(id) < 0) ids.Append(id).Append(' ');
                 SectionedTooltipsMod.Log("Item Details 区块：" + ids.ToString().Trim());
             }
+            // 水质成分表不在 water 区块里（它由物品详情直接写进 builder），但总是紧跟在
+            // 量条那行后面，所以从 water 那一行开始，把后面连续的“制表位 + 百分比”行一起归过去。
+            bool afterWater = false;
             for (int i = 0; i < lines.Count; i++)
             {
                 string id;
-                if (!sections.TryGetValue(lines[i].Plain, out id)) continue;
-                string key = SectionOf(id);
+                bool known = sections.TryGetValue(lines[i].Plain, out id);
+                string key = known ? SectionOf(id) : null;
                 if (key != null) lines[i].Key = key;
+                if (!known)
+                {
+                    if (afterWater && WaterRow(lines[i])) { lines[i].Key = Sections.Liquid; continue; }
+                    afterWater = false;
+                    continue;
+                }
+                afterWater = id == "water";
             }
+        }
+
+        /// 成分行、展开提示行：以百分比结尾，并且带制表位（“水　9.1L　91.04%”）。
+        private static bool WaterRow(Line line)
+        {
+            if (line.Key != Sections.Mods) return false;
+            string plain = line.Plain;
+            if (plain.Length < 3 || plain[plain.Length - 1] != '%') return false;
+            return plain.IndexOf(TextUnits.IdeographicSpace) >= 0;
         }
 
         /// 区块 id 对应到我们哪一节；null 表示保持原样。
