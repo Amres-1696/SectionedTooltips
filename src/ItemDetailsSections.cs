@@ -8,6 +8,7 @@ namespace SectionedTooltips
     // 但类型本身可以直接写全名——这样编译期就有确定的类型，不用反射，也就不会触发模组扫描器。
     using Runs = IReadOnlyList<ValueTuple<string, string, RenderHandler.ColorPalette, float, int, RenderHandler.ColorPalette, string>>;
     using Fields = IReadOnlyDictionary<string, object>;
+    using RowsList = IReadOnlyList<ValueTuple<string, string, string, string>>;
     using ReadDelegate = Func<RichTextBuilder, Action<string,
         IReadOnlyList<ValueTuple<string, string, RenderHandler.ColorPalette, float, int, RenderHandler.ColorPalette, string>>,
         IReadOnlyDictionary<string, object>>, bool>;
@@ -46,30 +47,69 @@ namespace SectionedTooltips
             catch { }
         }
 
+        /// <summary>区块里的一行成分：名称、用量、百分比（Item Details 的 rows 字段）。</summary>
+        internal sealed class ComponentRow
+        {
+            internal string Name = "";
+            internal string Amount = "";
+            internal string Percent = "";
+        }
+
+        /// <summary>这次构建读到的东西：每行属于哪个区块，以及区块给出的成分行。</summary>
+        internal sealed class Result
+        {
+            internal readonly Dictionary<string, string> LineToSection = new Dictionary<string, string>();
+            internal readonly List<ComponentRow> Components = new List<ComponentRow>();
+        }
+
         /// <summary>
-        /// 读这次构建的区块：返回“行文字 → 区块 id”。没装 Item Details、它没启用区块协议，
-        /// 或者这行不在任何区块里时返回 null。
+        /// 读这次构建的区块。没装 Item Details、它没启用区块协议，或者什么都读不到时返回 null。
         /// </summary>
-        internal static Dictionary<string, string> Read(RichTextBuilder builder)
+        internal static Result Read(RichTextBuilder builder)
         {
             if (builder == null) return null;
             ReadDelegate read = AppDomain.CurrentDomain.GetData(ReadSlot) as ReadDelegate;
             if (read == null) return null;
-            Dictionary<string, string> result = new Dictionary<string, string>();
+            Result result = new Result();
             try
             {
                 bool debug = Settings.Debug != null && Settings.Debug.Value;
                 bool any = read(builder, delegate(string id, Runs runs, Fields fields)
                 {
                     Collect(result, id, runs);
+                    CollectRows(result, fields);
                     if (debug) Dump(id, runs, fields);
                 });
-                return any && result.Count > 0 ? result : null;
+                return any && (result.LineToSection.Count > 0 || result.Components.Count > 0) ? result : null;
             }
             catch (Exception e)
             {
                 SectionedTooltipsMod.Log("读 Item Details 区块失败，按文本处理：" + e.Message);
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// rows 字段：IReadOnlyList<(string Kind, string Name, string Amount, string Percent)>。
+        /// 这是它算好的成分行（名称/用量/百分比），不用再从文本里反推。
+        /// </summary>
+        private static void CollectRows(Result result, Fields fields)
+        {
+            if (fields == null) return;
+            object value;
+            if (!fields.TryGetValue("rows", out value)) return;
+            RowsList rows = value as RowsList;
+            if (rows == null) return;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                // component 是成分行，fold-hint 是“按Ctrl展开杂质”那一行，都属于这张表。
+                string name = rows[i].Item2;
+                if (string.IsNullOrEmpty(name)) continue;
+                ComponentRow row = new ComponentRow();
+                row.Name = name.Trim();
+                row.Amount = (rows[i].Item3 ?? "").Trim();
+                row.Percent = (rows[i].Item4 ?? "").Trim();
+                if (row.Name.Length > 0) result.Components.Add(row);
             }
         }
 
@@ -112,7 +152,7 @@ namespace SectionedTooltips
             SectionedTooltipsMod.Log("区块 " + id + "：" + text2.Trim());
         }
 
-        private static void Collect(Dictionary<string, string> result, string id, Runs runs)
+        private static void Collect(Result result, string id, Runs runs)
         {
             if (string.IsNullOrEmpty(id) || runs == null) return;
             System.Text.StringBuilder line = new System.Text.StringBuilder();
@@ -137,13 +177,13 @@ namespace SectionedTooltips
             Put(result, id, line);
         }
 
-        private static void Put(Dictionary<string, string> result, string id, System.Text.StringBuilder line)
+        private static void Put(Result result, string id, System.Text.StringBuilder line)
         {
             string plain = TextUnits.Plain(line.ToString()).Trim();
             line.Length = 0;
             if (plain.Length == 0) return;
             // 同一行文字出现在多个区块里时先到先得；我们的行本来也不会重复。
-            if (!result.ContainsKey(plain)) result[plain] = id;
+            if (!result.LineToSection.ContainsKey(plain)) result.LineToSection[plain] = id;
         }
     }
 }

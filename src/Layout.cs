@@ -88,7 +88,6 @@ namespace SectionedTooltips
         /// 最近用过的在前。
         private static readonly List<Cached> cache = new List<Cached>();
         private static GameItem loggedItem;
-        private static bool sectionsLogged;
 
         /// 最近一次排版的物品和结果（也就是这一帧的 tooltip）。
         internal static GameItem LastItem;
@@ -479,23 +478,37 @@ namespace SectionedTooltips
         }
 
         /// 用 Item Details 的区块把它的行改判到我们的小节。
-        private static void RekeySections(List<Line> lines, Dictionary<string, string> sections)
+        private static void RekeySections(List<Line> lines, ItemDetailsSections.Result data)
         {
-            if (sections == null || sections.Count == 0) return;
-            if (!sectionsLogged)
-            {
-                // 第一次读到区块时记一条，方便确认协议真的通了。
-                sectionsLogged = true;
-                StringBuilder ids = new StringBuilder();
-                foreach (string id in sections.Values) if (ids.ToString().IndexOf(id) < 0) ids.Append(id).Append(' ');
-                SectionedTooltipsMod.Log("Item Details 区块：" + ids.ToString().Trim());
-            }
+            if (data == null) return;
+            Dictionary<string, string> sections = data.LineToSection;
             for (int i = 0; i < lines.Count; i++)
             {
                 string id;
                 if (!sections.TryGetValue(lines[i].Plain, out id)) continue;
                 string key = SectionOf(id);
                 if (key != null) lines[i].Key = key;
+            }
+            // 成分表不在区块的 runs 里，但 rows 字段给了每行的名称/用量/百分比，按它认。
+            if (data.Components.Count > 0) RekeyComponents(lines, data.Components);
+        }
+
+        /// 用区块给出的成分行（“水 9.1L 91.04%”）把对应的文本行归到液体。
+        private static void RekeyComponents(List<Line> lines, List<ItemDetailsSections.ComponentRow> rows)
+        {
+            for (int i = 0; i < lines.Count; i++)
+            {
+                Line l = lines[i];
+                if (l.Key != Sections.Mods && l.Key != Sections.Info) continue;
+                for (int k = 0; k < rows.Count; k++)
+                {
+                    ItemDetailsSections.ComponentRow r = rows[k];
+                    if (r.Name.Length == 0 || !l.Plain.StartsWith(r.Name, StringComparison.Ordinal)) continue;
+                    if (r.Amount.Length > 0 && l.Plain.IndexOf(r.Amount, StringComparison.Ordinal) < 0) continue;
+                    if (r.Percent.Length > 0 && l.Plain.IndexOf(r.Percent, StringComparison.Ordinal) < 0) continue;
+                    l.Key = Sections.Liquid;
+                    break;
+                }
             }
         }
 
