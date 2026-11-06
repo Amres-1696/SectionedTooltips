@@ -62,7 +62,7 @@ namespace SectionedTooltips
                 bool any = read(builder, delegate(string id, Runs runs, Fields fields)
                 {
                     Collect(result, id, runs);
-                    if (debug) Dump(id, runs);
+                    if (debug) Dump(id, runs, fields);
                 });
                 return any && result.Count > 0 ? result : null;
             }
@@ -73,8 +73,24 @@ namespace SectionedTooltips
             }
         }
 
-        /// 调试用：把这个区块的每一行写进日志，方便看清它对不上时到底给了什么。
-        private static void Dump(string id, Runs runs)
+        /// 调试用：把这个区块的每一行、以及它带的字段名写进日志。
+        private static void Dump(string id, Runs runs, Fields fields)
+        {
+            if (runs != null) DumpRuns(id, runs);
+            if (fields == null) return;
+            StringBuilder keys = new StringBuilder();
+            foreach (KeyValuePair<string, object> kv in fields)
+            {
+                if (kv.Key == null) continue;
+                keys.Append(kv.Key);
+                System.Collections.ICollection set = kv.Value as System.Collections.ICollection;
+                if (set != null) keys.Append('(').Append(set.Count).Append(')');
+                keys.Append(' ');
+            }
+            if (keys.Length > 0) SectionedTooltipsMod.Log("区块字段 " + id + "：" + keys.ToString().Trim());
+        }
+
+        private static void DumpRuns(string id, Runs runs)
         {
             if (runs == null) return;
             StringBuilder line = new StringBuilder();
