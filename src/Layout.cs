@@ -517,19 +517,51 @@ namespace SectionedTooltips
         {
             switch (id)
             {
+                // 区块 id 来自 Item Details 的 sdk（TooltipSectionIds），是它自己声明的归属，不是我们猜的。
                 case "water":
                 case "water-advice":
                     return Sections.Liquid;
                 case "seed":
                     return Sections.Plant;
                 case "machine-interior":
+                case "machine-speed":
+                case "machine-power":
+                case "machine-effect":
                     return Sections.Machine;
+                case "conditions":
+                case "hidden":
+                case "feature-reveal":
+                    return Sections.Condition;   // 瑕疵、真实耐久、被伪装的特性
+                case "auth":
+                case "value":
+                case "injected-value":
+                case "ribwich":
+                    return Sections.Appraisal;   // 真伪、价值分解
+                case "module-learning":
+                    return Sections.Module;
+                case "lottery":
+                case "scratcher":
+                    return Sections.Lottery;
+                case "wine":
+                    return Sections.Brew;
+                case "meat":
+                case "calories":
+                case "berry":
+                    return Sections.Food;
+                case "label":
+                    return Sections.Label;
+                case "description":
+                    return Sections.Desc;
                 case "storage":
                 case "sealed-box":
-                    // 内容物由我们画的时候，这两块的行整段不要了（装载一节不画）；
+                case "contents":
+                case "sealed-contents":
+                    // 内容物由我们画的时候，这些行整段不要了（装载一节不画）；
                     // 面板关着时保持原样，免得把内容物信息丢掉。
                     return Settings.IsTicket && Settings.On(Settings.ContentsPanel) ? Sections.Container : null;
                 default:
+                    // price / value-enhance / market / categories 等保持原样：
+                    // 价值一节有自己的价格处理，塞进去反而会被当售价解析。
                     return null;
             }
         }
