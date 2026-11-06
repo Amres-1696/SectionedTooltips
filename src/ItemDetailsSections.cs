@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace SectionedTooltips
 {
@@ -57,9 +58,11 @@ namespace SectionedTooltips
             Dictionary<string, string> result = new Dictionary<string, string>();
             try
             {
+                bool debug = Settings.Debug != null && Settings.Debug.Value;
                 bool any = read(builder, delegate(string id, Runs runs, Fields fields)
                 {
                     Collect(result, id, runs);
+                    if (debug) Dump(id, runs);
                 });
                 return any && result.Count > 0 ? result : null;
             }
@@ -68,6 +71,29 @@ namespace SectionedTooltips
                 SectionedTooltipsMod.Log("读 Item Details 区块失败，按文本处理：" + e.Message);
                 return null;
             }
+        }
+
+        /// 调试用：把这个区块的每一行写进日志，方便看清它对不上时到底给了什么。
+        private static void Dump(string id, Runs runs)
+        {
+            if (runs == null) return;
+            StringBuilder line = new StringBuilder();
+            StringBuilder all = new StringBuilder();
+            for (int i = 0; i < runs.Count; i++)
+            {
+                string kind = runs[i].Item1, text = runs[i].Item2;
+                if (kind == "line" || kind == "break")
+                {
+                    if (line.Length > 0) all.Append(" | ").Append(line.ToString());
+                    line.Length = 0;
+                    continue;
+                }
+                if (!string.IsNullOrEmpty(text)) line.Append(text.Replace('\n', ' ').Replace('\r', ' '));
+            }
+            if (line.Length > 0) all.Append(" | ").Append(line.ToString());
+            string text2 = TextUnits.Plain(all.ToString());
+            if (text2.Length > 200) text2 = text2.Substring(0, 200) + "…";
+            SectionedTooltipsMod.Log("区块 " + id + "：" + text2.Trim());
         }
 
         private static void Collect(Dictionary<string, string> result, string id, Runs runs)
@@ -83,7 +109,14 @@ namespace SectionedTooltips
                     continue;
                 }
                 string text = runs[i].Item2;
-                if (!string.IsNullOrEmpty(text)) line.Append(text);
+                if (string.IsNullOrEmpty(text)) continue;
+                // 一个 run 里可能塞了整块多行文字（水质成分表就是），按换行再切一次。
+                for (int k = 0; k < text.Length; k++)
+                {
+                    char ch = text[k];
+                    if (ch == '\n' || ch == '\r') { Put(result, id, line); continue; }
+                    line.Append(ch);
+                }
             }
             Put(result, id, line);
         }
