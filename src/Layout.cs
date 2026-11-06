@@ -552,14 +552,11 @@ namespace SectionedTooltips
                     return Sections.Label;
                 case "description":
                     return Sections.Desc;
-                case "storage":
-                case "sealed-box":
-                case "contents":
-                case "sealed-contents":
-                    // 内容物由我们画的时候，这些行整段不要了（装载一节不画）；
-                    // 面板关着时保持原样，免得把内容物信息丢掉。
-                    return Settings.IsTicket && Settings.On(Settings.ContentsPanel) ? Sections.Container : null;
                 default:
+                    // storage / sealed-box 保持原样：0.8.x 的 storage 只剩压缩率那一行，
+                    // sealed-box 是玩家开了“透视”才有的密封箱内容——这两样我们的面板都不画，
+                    // 映射到“装载”（不画）会把它们吞掉。
+                    // price / value-enhance / market / categories 同理：价值一节有自己的价格解析。
                     // price / value-enhance / market / categories 等保持原样：
                     // 价值一节有自己的价格处理，塞进去反而会被当售价解析。
                     return null;
