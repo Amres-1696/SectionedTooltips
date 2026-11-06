@@ -487,6 +487,12 @@ namespace SectionedTooltips
                 string id;
                 if (!sections.TryGetValue(lines[i].Plain, out id)) continue;
                 string key = SectionOf(id);
+                // 既有 id 映射优先；认不出时才采用可选归属组，减少新增区块的映射维护。
+                if (key == null)
+                {
+                    string group;
+                    if (data.LineToGroup.TryGetValue(lines[i].Plain, out group)) key = SectionOfGroup(group);
+                }
                 if (key != null) lines[i].Key = key;
             }
             // 成分表不在区块的 runs 里，但 rows 字段给了每行的名称/用量/百分比，按它认。
@@ -509,6 +515,26 @@ namespace SectionedTooltips
                     l.Key = Sections.Liquid;
                     break;
                 }
+            }
+        }
+
+        /// 可选归属组；只收画法固定、真有标题栏的小节。
+        /// label / price / contents 保持原有处理：标签列、价值节自己解析、内容物面板各有各的规矩。
+        /// description 同理不收：描述不是小节——它会随「显示描述」开关整类删掉，并按段落排版。
+        private static string SectionOfGroup(string group)
+        {
+            switch (group)
+            {
+                case "liquid": return Sections.Liquid;
+                case "plant": return Sections.Plant;
+                case "machine": return Sections.Machine;
+                case "condition": return Sections.Condition;
+                case "appraisal": return Sections.Appraisal;
+                case "module": return Sections.Module;
+                case "lottery": return Sections.Lottery;
+                case "brew": return Sections.Brew;
+                case "food": return Sections.Food;
+                default: return null;
             }
         }
 

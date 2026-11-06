@@ -56,10 +56,11 @@ namespace SectionedTooltips
             internal string Percent = "";
         }
 
-        /// <summary>这次构建读到的东西：每行属于哪个区块，以及区块给出的成分行。</summary>
+        /// <summary>这次构建读到的东西：每行属于哪个区块、可选归属组，以及区块给出的成分行。</summary>
         internal sealed class Result
         {
             internal readonly Dictionary<string, string> LineToSection = new Dictionary<string, string>();
+            internal readonly Dictionary<string, string> LineToGroup = new Dictionary<string, string>();
             internal readonly List<ComponentRow> Components = new List<ComponentRow>();
         }
 
@@ -77,7 +78,7 @@ namespace SectionedTooltips
                 bool debug = Settings.Debug != null && Settings.Debug.Value;
                 bool any = read(builder, delegate(string id, Runs runs, Fields fields)
                 {
-                    Collect(result, id, runs);
+                    Collect(result, id, runs, fields);
                     CollectRows(result, fields);
                     if (debug) Dump(id, runs, fields);
                 });
@@ -173,9 +174,10 @@ namespace SectionedTooltips
             SectionedTooltipsMod.Log("区块 " + id + "：" + text2.Trim());
         }
 
-        private static void Collect(Result result, string id, Runs runs)
+        private static void Collect(Result result, string id, Runs runs, Fields fields)
         {
             if (string.IsNullOrEmpty(id) || runs == null) return;
+            string group = GroupOf(fields);
             System.Text.StringBuilder line = new System.Text.StringBuilder();
             for (int i = 0; i < runs.Count; i++)
             {
@@ -186,34 +188,47 @@ namespace SectionedTooltips
                     if (!string.IsNullOrEmpty(text)) line.Append(text);
                     string tail = runs[i].Item7;
                     if (!string.IsNullOrEmpty(tail)) line.Append(tail);
-                    Put(result, id, line);
+                    Put(result, id, line, group);
                     continue;
                 }
                 // kind == "line"：整个 run 就是一行，文本在它自己身上，要先收再断行。
                 if (string.IsNullOrEmpty(text))
                 {
-                    if (kind == "line" || kind == "break") Put(result, id, line);
+                    if (kind == "line" || kind == "break") Put(result, id, line, group);
                     continue;
                 }
                 // 一个 run 里可能塞了整块多行文字（水质成分表就是），按换行再切一次。
                 for (int k = 0; k < text.Length; k++)
                 {
                     char ch = text[k];
-                    if (ch == '\n' || ch == '\r') { Put(result, id, line); continue; }
+                    if (ch == '\n' || ch == '\r') { Put(result, id, line, group); continue; }
                     line.Append(ch);
                 }
-                if (kind == "line") Put(result, id, line);
+                if (kind == "line") Put(result, id, line, group);
             }
-            Put(result, id, line);
+            Put(result, id, line, group);
         }
 
-        private static void Put(Result result, string id, System.Text.StringBuilder line)
+        /// <summary>可选字段；旧版不提供、或类型不符时保持原有归类。</summary>
+        private static string GroupOf(Fields fields)
+        {
+            if (fields == null) return "";
+            object value;
+            if (!fields.TryGetValue("group", out value)) return "";
+            return value as string ?? "";
+        }
+
+        private static void Put(Result result, string id, System.Text.StringBuilder line, string group)
         {
             string plain = TextUnits.Plain(line.ToString()).Trim();
             line.Length = 0;
             if (plain.Length == 0) return;
             // 同一行文字出现在多个区块里时先到先得；我们的行本来也不会重复。
-            if (!result.LineToSection.ContainsKey(plain)) result.LineToSection[plain] = id;
+            if (!result.LineToSection.ContainsKey(plain))
+            {
+                result.LineToSection[plain] = id;
+                if (!string.IsNullOrEmpty(group)) result.LineToGroup[plain] = group;
+            }
         }
     }
 }
