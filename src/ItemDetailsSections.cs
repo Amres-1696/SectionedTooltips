@@ -9,6 +9,7 @@ namespace SectionedTooltips
     using Runs = IReadOnlyList<ValueTuple<string, string, RenderHandler.ColorPalette, float, int, RenderHandler.ColorPalette, string>>;
     using Fields = IReadOnlyDictionary<string, object>;
     using RowsList = IReadOnlyList<ValueTuple<string, string, string, string>>;
+    using RowDataList = IReadOnlyList<ValueTuple<int, string, object>>;
     using ReadDelegate = Func<RichTextBuilder, Action<string,
         IReadOnlyList<ValueTuple<string, string, RenderHandler.ColorPalette, float, int, RenderHandler.ColorPalette, string>>,
         IReadOnlyDictionary<string, object>>, bool>;
@@ -128,6 +129,27 @@ namespace SectionedTooltips
                 keys.Append(' ');
             }
             if (keys.Length > 0) SectionedTooltipsMod.Log("区块字段 " + id + "：" + keys.ToString().Trim());
+
+            // rowData：(行号, 数据键, 值)。用来判断这行的结构化数据里有没有文本。
+            object raw;
+            if (fields.TryGetValue("rowData", out raw))
+            {
+                RowDataList data = raw as RowDataList;
+                if (data != null)
+                {
+                    StringBuilder text = new StringBuilder();
+                    for (int i = 0; i < data.Count && i < 6; i++)
+                    {
+                        text.Append('[').Append(data[i].Item1).Append(' ').Append(data[i].Item2).Append(" = ");
+                        object v = data[i].Item3;
+                        string shown = v == null ? "null" : v.ToString();
+                        if (shown != null && shown.Length > 40) shown = shown.Substring(0, 40) + "…";
+                        text.Append(shown).Append("] ");
+                    }
+                    SectionedTooltipsMod.Log("  rowData " + id + "：" + text.ToString().Trim());
+                }
+            }
+            if (runs != null) SectionedTooltipsMod.Log("  runs " + id + "：" + runs.Count);
         }
 
         private static void DumpRuns(string id, Runs runs)
@@ -138,13 +160,12 @@ namespace SectionedTooltips
             for (int i = 0; i < runs.Count; i++)
             {
                 string kind = runs[i].Item1, text = runs[i].Item2;
+                if (!string.IsNullOrEmpty(text)) line.Append(text.Replace('\n', ' ').Replace('\r', ' '));
                 if (kind == "line" || kind == "break")
                 {
                     if (line.Length > 0) all.Append(" | ").Append(line.ToString());
                     line.Length = 0;
-                    continue;
                 }
-                if (!string.IsNullOrEmpty(text)) line.Append(text.Replace('\n', ' ').Replace('\r', ' '));
             }
             if (line.Length > 0) all.Append(" | ").Append(line.ToString());
             string text2 = TextUnits.Plain(all.ToString());
@@ -158,14 +179,13 @@ namespace SectionedTooltips
             System.Text.StringBuilder line = new System.Text.StringBuilder();
             for (int i = 0; i < runs.Count; i++)
             {
-                string kind = runs[i].Item1;
-                if (kind == "line" || kind == "break")
+                string kind = runs[i].Item1, text = runs[i].Item2;
+                // kind == "line"：整个 run 就是一行，文本在它自己身上，要先收再断行。
+                if (string.IsNullOrEmpty(text))
                 {
-                    Put(result, id, line);
+                    if (kind == "line" || kind == "break") Put(result, id, line);
                     continue;
                 }
-                string text = runs[i].Item2;
-                if (string.IsNullOrEmpty(text)) continue;
                 // 一个 run 里可能塞了整块多行文字（水质成分表就是），按换行再切一次。
                 for (int k = 0; k < text.Length; k++)
                 {
@@ -173,6 +193,7 @@ namespace SectionedTooltips
                     if (ch == '\n' || ch == '\r') { Put(result, id, line); continue; }
                     line.Append(ch);
                 }
+                if (kind == "line") Put(result, id, line);
             }
             Put(result, id, line);
         }
