@@ -702,7 +702,8 @@ namespace SectionedTooltips
             }
 
             // 没有冒号、但行尾是“+25%”这种：前面的短名字当标签（“种子产量 +25%”）。
-            if (split <= 0 && pairs)
+            // 已经是多列的制表位行就不抢：那样会把列结构拆掉。
+            if (split <= 0 && pairs && cells == null)
             {
                 string tailLabel, tailValue;
                 if (TextRules.TrailingPercent(l.Plain, out tailLabel, out tailValue))
