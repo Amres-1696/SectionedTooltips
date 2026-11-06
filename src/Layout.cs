@@ -88,6 +88,7 @@ namespace SectionedTooltips
         /// 最近用过的在前。
         private static readonly List<Cached> cache = new List<Cached>();
         private static GameItem loggedItem;
+        private static bool sectionsLogged;
 
         /// 最近一次排版的物品和结果（也就是这一帧的 tooltip）。
         internal static GameItem LastItem;
@@ -132,6 +133,8 @@ namespace SectionedTooltips
             int[] ordOf;
             string[] keyOf = AssignKeys(segs.Count, marks, out ordOf);
             List<Line> lines = SplitLines(segs, keyOf, ordOf);
+            // Item Details 的区块：把它的行归到对应的小节，不再靠文本猜（没装它时为 null）。
+            RekeySections(lines, ItemDetailsSections.Read(b));
             SplitCustomName(lines, f.Item);
             MarkDescription(lines, f.Item);
             // 玩家关掉的部分，两种风格都适用。
@@ -472,6 +475,48 @@ namespace SectionedTooltips
                 int min = i > 0 && lines[i - 1].Key == Sections.Desc ? 1 : 4;
                 if (l.FromHelper || l.Key == Sections.Title || l.Plain.Length < min) continue;
                 if (desc.IndexOf(l.Plain, StringComparison.Ordinal) >= 0) l.Key = Sections.Desc;
+            }
+        }
+
+        /// 用 Item Details 的区块把它的行改判到我们的小节。
+        private static void RekeySections(List<Line> lines, Dictionary<string, string> sections)
+        {
+            if (sections == null || sections.Count == 0) return;
+            if (!sectionsLogged)
+            {
+                // 第一次读到区块时记一条，方便确认协议真的通了。
+                sectionsLogged = true;
+                StringBuilder ids = new StringBuilder();
+                foreach (string id in sections.Values) if (ids.ToString().IndexOf(id) < 0) ids.Append(id).Append(' ');
+                SectionedTooltipsMod.Log("Item Details 区块：" + ids.ToString().Trim());
+            }
+            for (int i = 0; i < lines.Count; i++)
+            {
+                string id;
+                if (!sections.TryGetValue(lines[i].Plain, out id)) continue;
+                string key = SectionOf(id);
+                if (key != null) lines[i].Key = key;
+            }
+        }
+
+        /// 区块 id 对应到我们哪一节；null 表示保持原样。
+        private static string SectionOf(string id)
+        {
+            switch (id)
+            {
+                case "water":
+                    return Sections.Liquid;
+                case "seed":
+                    return Sections.Plant;
+                case "machine-interior":
+                    return Sections.Machine;
+                case "storage":
+                case "sealed-box":
+                    // 内容物由我们画的时候，这两块的行整段不要了（装载一节不画）；
+                    // 面板关着时保持原样，免得把内容物信息丢掉。
+                    return Settings.IsTicket && Settings.On(Settings.ContentsPanel) ? Sections.Container : null;
+                default:
+                    return null;
             }
         }
 

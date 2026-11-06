@@ -23,6 +23,7 @@ namespace SectionedTooltips
             if (!ready) Error("RichTextBuilder internals not found; tooltips stay vanilla.");
             // 把排版声明和 tooltip 锚点交给 Item Details（没装它也没关系，只是没人读）。
             if (ready) ItemDetailsBridge.Register();
+            if (ready) ItemDetailsSections.Register();
         }
 
         private static bool ready;
@@ -51,6 +52,8 @@ namespace SectionedTooltips
 
         public void OnDisable()
         {
+            try { ItemDetailsSections.Unregister(); }
+            catch (Exception e) { Error("unregistering section watch failed: " + e.Message); }
             try { ItemDetailsBridge.Unregister(); }
             catch (Exception e) { Error("unregistering from Item Details failed: " + e.Message); }
             // 之后加载器会立刻卸载我们的 patch，所以现在不隐藏的话，估价单不会消失，淡出的原版窗口也回不来。
