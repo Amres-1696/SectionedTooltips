@@ -241,6 +241,7 @@ namespace SectionedTooltips
             TabLayout tab = TabLayoutOf(c, bl);
             // 小标题（“升级：”、“模组效果：”）给它下面没有自己标签的行当标签。
             string pending = null;
+            bool headed = false;   // 正处在某个小标题管着的行里
             for (int i = 0; i < bl.Rows.Count; i++)
             {
                 Row row = bl.Rows[i];
@@ -266,6 +267,7 @@ namespace SectionedTooltips
                         SectionedTooltipsMod.Log(string.Format("模块节：标签列 {0:F0}px，值列 {1:F0}px，小标题「{2}」", c.LabelCol, ValueX(c), PlainOf(row.Label).Trim()));
                     if (pending != null) y = GridLine(c, pending, "", y);
                     pending = InkRich(row.Label, InkSoft, false);
+                    headed = true;
                     continue;
                 }
                 stats = true;
@@ -287,6 +289,7 @@ namespace SectionedTooltips
                 }
                 if (row.IsPair)
                 {
+                    headed = false;
                     // 有自己标签的行上面的小标题单独占一行。
                     if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, "", y);
                     pending = null;
@@ -320,7 +323,9 @@ namespace SectionedTooltips
                 }
                 // 带进度条的行跟着上面那条条的起点走（和数值列对齐）；其余的从标签列起，
                 // 免得“（另 3 项低于显示阈值）”这种说明缩到数值列去。
-                float rowX = labelled && BarOf(row.Segs) != null ? ValueX(c) : left;
+                // 小标题（“模组效果：”）管着的那几行例外：标签占着标签列，行也从标签列起就会叠在一起，
+                // 整组都从数值列起。
+                float rowX = labelled && (BarOf(row.Segs) != null || headed) ? ValueX(c) : left;
                 y = GridRow(c, row, pending ?? "", rowX, y);
                 if (pending != null) pending = "";
             }
