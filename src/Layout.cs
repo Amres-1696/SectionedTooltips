@@ -505,6 +505,7 @@ namespace SectionedTooltips
             switch (id)
             {
                 case "water":
+                case "water-advice":
                     return Sections.Liquid;
                 case "seed":
                     return Sections.Plant;
