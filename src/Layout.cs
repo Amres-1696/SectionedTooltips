@@ -518,7 +518,9 @@ namespace SectionedTooltips
             }
         }
 
-        /// 可选归属组；只收无歧义的组，label / price / contents 与未知组保持原有处理。
+        /// 可选归属组；只收画法固定、真有标题栏的小节。
+        /// label / price / contents 保持原有处理：标签列、价值节自己解析、内容物面板各有各的规矩。
+        /// description 同理不收：描述不是小节——它会随「显示描述」开关整类删掉，并按段落排版。
         private static string SectionOfGroup(string group)
         {
             switch (group)
@@ -532,7 +534,6 @@ namespace SectionedTooltips
                 case "lottery": return Sections.Lottery;
                 case "brew": return Sections.Brew;
                 case "food": return Sections.Food;
-                case "description": return Sections.Desc;
                 default: return null;
             }
         }
