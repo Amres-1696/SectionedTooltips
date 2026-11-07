@@ -648,8 +648,11 @@ namespace SectionedTooltips
             try
             {
                 if (card == null) return;
+                // 尺寸用构建时算好的 w/h：card.rect 在 anchoredPosition/sizeDelta 刚写完时可能还是旧值
+                // （多列卡片就会报小一半，导出后看什么都"出界"）。
+                card.ForceUpdateRectTransforms();
                 Rect cr = card.rect;
-                float cw = Mathf.Round(cr.width), ch = Mathf.Round(cr.height);
+                float cw = Mathf.Round(Mathf.Max(w, cr.width)), ch = Mathf.Round(Mathf.Max(h, cr.height));
                 StringBuilder sb = new StringBuilder(2048);
                 sb.Append("[slip] ").Append(Clean(DumpName(item)))
                   .Append(' ').Append(cw).Append('x').Append(ch);
