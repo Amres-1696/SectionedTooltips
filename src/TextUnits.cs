@@ -333,6 +333,23 @@ namespace SectionedTooltips
             return cells.Count >= 2 ? cells : null;
         }
 
+        /// <summary>按竖线切成几段（“精工扩舱 0 | 剩余升级次数：12 | 酒瓶区 6x4”）；没有竖线返回 null。</summary>
+        internal static List<List<Unit>> SplitPipes(List<Unit> units)
+        {
+            List<List<Unit>> parts = new List<List<Unit>>();
+            int from = 0;
+            for (int i = 0; i < units.Count; i++)
+            {
+                if (units[i].Tag || units[i].Text != "|") continue;
+                if (i > from) parts.Add(TrimEnd(units.GetRange(from, i - from)));
+                from = i + 1;
+            }
+            if (parts.Count == 0) return null;
+            if (from < units.Count) parts.Add(TrimEnd(units.GetRange(from, units.Count - from)));
+            for (int k = parts.Count - 1; k >= 0; k--) if (parts[k].Count == 0) parts.RemoveAt(k);
+            return parts.Count >= 2 ? parts : null;
+        }
+
         /// 把 units 还原成带样式的 segs，来自同一 seg 的相邻部分合并。
         internal static List<Seg> ToSegs(List<Unit> units, List<Seg> source)
         {

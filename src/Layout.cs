@@ -623,6 +623,34 @@ namespace SectionedTooltips
                     for (int j = 0; j < pairs.Count; j++) cur.Rows.Add(PairRow(pairs[j], l.Ord));
                     continue;
                 }
+                // “精工扩舱 0 | 剩余升级次数：12 | 酒瓶区 6x4”：竖线隔开的几段各自成行，
+                // 否则冒号会把整行切成一个假标签。
+                if (l.Key != Sections.Module && l.Key != Sections.Desc && l.Plain.IndexOf('|') >= 0)
+                {
+                    List<List<Unit>> pipes = TextUnits.SplitPipes(TextUnits.Of(l.Segs));
+                    if (pipes != null)
+                    {
+                        List<Row> split = new List<Row>(pipes.Count);
+                        bool ok = true;
+                        for (int k = 0; k < pipes.Count; k++)
+                        {
+                            Line part = new Line();
+                            part.Segs = TextUnits.ToSegs(pipes[k], l.Segs);
+                            part.Key = l.Key;
+                            part.Ord = l.Ord;
+                            part.Plain = TextUnits.Plain(pipes[k]);
+                            Row pr = MakeRow(part, maxLabel, l.Key != Sections.Module);
+                            if (!pr.IsPair) { ok = false; break; }
+                            split.Add(pr);
+                        }
+                        if (ok && split.Count >= 2)
+                        {
+                            if (cur == null || cur.Key != l.Key) { cur = new Block(); cur.Key = l.Key; blocks.Add(cur); }
+                            for (int k = 0; k < split.Count; k++) cur.Rows.Add(split[k]);
+                            continue;
+                        }
+                    }
+                }
                 // 模组的状态和词条是句子，不是“标签: 数值”：词条描述里的冒号会被切成两半。
                 Row row = MakeRow(l, maxLabel, l.Key != Sections.Module);
                 string key = l.Key;
@@ -648,7 +676,27 @@ namespace SectionedTooltips
                 }
                 cur.Rows.Add(row);
             }
+            MergeSplitSections(blocks);
             return blocks;
+        }
+
+        /// 同一节被别的节隔开（酒瓶的“水”和“果酿”中间夹了附加信息）时并回第一段，
+        /// 否则估价单上会出现两个同名标题。标题、描述不并：它们本来就按顺序分开。
+        private static void MergeSplitSections(List<Block> blocks)
+        {
+            for (int i = blocks.Count - 1; i >= 0; i--)
+            {
+                Block later = blocks[i];
+                if (later.Key == Sections.Title || later.Key == Sections.Desc) continue;
+                for (int j = 0; j < i; j++)
+                {
+                    Block first = blocks[j];
+                    if (first.Key != later.Key) continue;
+                    first.Rows.AddRange(later.Rows);
+                    blocks.RemoveAt(i);
+                    break;
+                }
+            }
         }
 
         // ---------------------------------------------------------------- 标签和数值拆列
