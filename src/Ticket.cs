@@ -627,7 +627,6 @@ namespace SectionedTooltips
                 g.interactable = false;
                 g.blocksRaycasts = false;
             }
-            if (Dump.On) Dump.Write(item, card, w, h, r.Blocks);
             Keep(r, item);
             if (probe == null) return;
             Step("finish");
@@ -1789,7 +1788,7 @@ namespace SectionedTooltips
             return PlainOf(row.Segs ?? row.Label);
         }
 
-        internal static string PlainOf(List<Seg> segs)
+        private static string PlainOf(List<Seg> segs)
         {
             if (segs == null) return "";
             StringBuilder sb = new StringBuilder();
