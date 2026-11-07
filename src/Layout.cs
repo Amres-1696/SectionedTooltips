@@ -27,8 +27,6 @@ namespace SectionedTooltips
         public bool IsPair { get { return Label != null && !Heading; } }
         /// 名字不占标签列、自己撑满一行（“名字 …… +6.96%”那种列表）。
         public bool Wide;
-        /// 这一行是从“标签”节挪到“状态”的（耐久度那种），状态里本来就有一样的就丢掉。
-        public bool FromLabel;
     }
 
     internal sealed class Block
@@ -627,8 +625,6 @@ namespace SectionedTooltips
                 // 挪到“状态”当普通的一对，和别的分数一样出条。
                 if (key == Sections.Label && row.IsPair && HasFractionBar(row))
                 {
-                    DropLabelPrefix(row);
-                    row.FromLabel = true;
                     if (cur == null || cur.Key != Sections.Condition) { cur = new Block(); cur.Key = Sections.Condition; blocks.Add(cur); }
                     cur.Rows.Add(row);
                     continue;
@@ -644,79 +640,7 @@ namespace SectionedTooltips
                 }
                 cur.Rows.Add(row);
             }
-            DropDuplicatedLabels(blocks);
             return blocks;
-        }
-
-        /// “标签”节挪过来的那行只是游戏对标签再报一次耐久度；状态里已经有同一条就丢掉它。
-        private static void DropDuplicatedLabels(List<Block> blocks)
-        {
-            for (int i = 0; i < blocks.Count; i++)
-            {
-                Block bl = blocks[i];
-                if (bl.Key != Sections.Condition) continue;
-                for (int j = bl.Rows.Count - 1; j >= 0; j--)
-                {
-                    Row row = bl.Rows[j];
-                    if (!row.FromLabel || !row.IsPair) continue;
-                    string label = Ticket.PlainOf(row.Label).Trim();
-                    string frac = Fraction(row.Value);
-                    if (frac.Length == 0) continue;
-                    for (int k = 0; k < bl.Rows.Count; k++)
-                    {
-                        Row other = bl.Rows[k];
-                        if (other == row || other.FromLabel || !other.IsPair) continue;
-                        if (Ticket.PlainOf(other.Label).Trim() != label) continue;
-                        if (Fraction(other.Value) != frac) continue;
-                        bl.Rows.RemoveAt(j);
-                        break;
-                    }
-                }
-            }
-        }
-
-        /// 去掉标签行前面的本地化前缀（“[标签] ”），连带后面的空格。
-        private static void DropLabelPrefix(Row row)
-        {
-            string prefix = LabelPrefix();
-            if (prefix.Length == 0) return;
-            string text = Ticket.PlainOf(row.Label);
-            if (!text.StartsWith(prefix, StringComparison.Ordinal)) return;
-            int drop = prefix.Length;
-            while (drop < text.Length && text[drop] == ' ') drop++;
-            DropChars(row.Label, drop);
-        }
-
-        private static string LabelPrefix()
-        {
-            try { return TextUnits.Plain(LocHelper.GetLocalizedMechanic("mech_label_tooltip_prefix") ?? "").Trim(); }
-            catch { return ""; }
-        }
-
-        private static void DropChars(List<Seg> segs, int chars)
-        {
-            for (int i = 0; i < segs.Count && chars > 0; i++)
-            {
-                Seg seg = segs[i];
-                if (seg.Bar != null) continue;
-                string text = seg.Text ?? "";
-                if (text.Length <= chars) { chars -= text.Length; seg.Text = ""; }
-                else { seg.Text = text.Substring(chars); chars = 0; }
-            }
-        }
-
-        /// 值里的“0/400”，取不到就是空串。
-        private static string Fraction(List<Seg> value)
-        {
-            string text = Ticket.PlainOf(value);
-            int slash = text.IndexOf('/');
-            if (slash <= 0) return "";
-            int a = slash - 1;
-            while (a >= 0 && char.IsDigit(text[a])) a--;
-            int b = slash + 1;
-            while (b < text.Length && char.IsDigit(text[b])) b++;
-            if (a + 1 == slash || b == slash + 1) return "";
-            return text.Substring(a + 1, b - a - 1);
         }
 
         // ---------------------------------------------------------------- 标签和数值拆列
