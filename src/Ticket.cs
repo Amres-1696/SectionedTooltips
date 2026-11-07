@@ -670,9 +670,26 @@ namespace SectionedTooltips
                     sb.Append(" | ").Append(Clean(t.text))
                       .Append('@').Append(Mathf.Round(x)).Append(',').Append(Mathf.Round(top))
                       .Append(',').Append(Mathf.Round(tw)).Append(',').Append(Mathf.Round(th))
-                      .Append(',').Append(Mathf.Round(t.fontSize));
+                      .Append(',').Append(Mathf.Round(t.fontSize))
+                      .Append(',').Append(Hex(t.color));
                 }
                 SectionedTooltipsMod.Log(sb.ToString());
+
+                // 矩形（底板、进度条、色块、虚线）另起一行：和纸一样是画出来的，不是文字。
+                Quads quads = card.GetComponentInChildren<Quads>(true);
+                if (quads != null)
+                {
+                    StringBuilder qb = new StringBuilder(4096);
+                    qb.Append("[quad] ").Append(Clean(DumpName(item)));
+                    for (int i = 0; i < quads.Count; i++)
+                    {
+                        Rect r = quads.RectAt(i);
+                        qb.Append(" | ").Append(Mathf.Round(r.x)).Append(',').Append(Mathf.Round(r.y))
+                          .Append(',').Append(Mathf.Round(r.width)).Append(',').Append(Mathf.Round(r.height))
+                          .Append(',').Append(Hex(quads.ColorAt(i)));
+                    }
+                    SectionedTooltipsMod.Log(qb.ToString());
+                }
             }
             catch (Exception e)
             {
@@ -684,6 +701,12 @@ namespace SectionedTooltips
         {
             try { return item != null ? item.GetDisplayName(false) : "?"; }
             catch { return "?"; }
+        }
+
+        private static string Hex(Color c)
+        {
+            Color32 v = c;
+            return ((v.r << 16) | (v.g << 8) | v.b).ToString("X6");
         }
 
         /// 日志里用 | 和 @ 分隔，正文里的这两个字符换成全角，免得解析错位。

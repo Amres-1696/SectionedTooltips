@@ -143,6 +143,10 @@ namespace SectionedTooltips
 
         internal int Count { get { return rects.Count; } }
 
+        /// 调试导出用：第 i 个矩形和它的颜色。
+        internal Rect RectAt(int i) { return rects[i]; }
+        internal Color32 ColorAt(int i) { return colors[i]; }
+
         internal void Add(float x, float yTop, float w, float h, Color color)
         {
             if (w <= 0f || h <= 0f) return;
