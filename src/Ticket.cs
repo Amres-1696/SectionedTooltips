@@ -648,23 +648,25 @@ namespace SectionedTooltips
             try
             {
                 if (card == null) return;
+                Rect cr = card.rect;
+                float cw = Mathf.Round(cr.width), ch = Mathf.Round(cr.height);
                 StringBuilder sb = new StringBuilder(2048);
                 sb.Append("[slip] ").Append(Clean(DumpName(item)))
-                  .Append(' ').Append(Mathf.Round(w)).Append('x').Append(Mathf.Round(h));
+                  .Append(' ').Append(cw).Append('x').Append(ch);
                 TextMeshProUGUI[] texts = card.GetComponentsInChildren<TextMeshProUGUI>(true);
                 Vector3[] corners = new Vector3[4];
-                card.GetWorldCorners(corners);
-                float ox = Mathf.Min(corners[0].x, corners[1].x), oy = Mathf.Max(corners[1].y, corners[2].y);
                 for (int i = 0; i < texts.Length; i++)
                 {
                     TextMeshProUGUI t = texts[i];
                     if (t == null || string.IsNullOrEmpty(t.text)) continue;
                     t.rectTransform.GetWorldCorners(corners);
-                    float x = Mathf.Min(corners[0].x, corners[1].x) - ox;
-                    float top = oy - Mathf.Max(corners[1].y, corners[2].y);
-                    float tw = Mathf.Abs(corners[2].x - corners[0].x);
-                    float th = Mathf.Abs(corners[1].y - corners[0].y);
-                    if (tw <= 0f || th <= 0f) continue;
+                    Vector3 lo = card.InverseTransformPoint(corners[0]);
+                    Vector3 hi = card.InverseTransformPoint(corners[2]);
+                    float x = Mathf.Min(lo.x, hi.x) - cr.xMin;
+                    float top = cr.yMax - Mathf.Max(lo.y, hi.y);
+                    float tw = Mathf.Abs(hi.x - lo.x);
+                    float th = Mathf.Abs(hi.y - lo.y);
+                    if (tw <= 0.5f || th <= 0.5f) continue;
                     sb.Append(" | ").Append(Clean(t.text))
                       .Append('@').Append(Mathf.Round(x)).Append(',').Append(Mathf.Round(top))
                       .Append(',').Append(Mathf.Round(tw)).Append(',').Append(Mathf.Round(th))
