@@ -627,6 +627,7 @@ namespace SectionedTooltips
                 g.interactable = false;
                 g.blocksRaycasts = false;
             }
+            if (Settings.Debug != null && Settings.Debug.Value) LogSlip(item, card, w, h);
             Keep(r, item);
             if (probe == null) return;
             Step("finish");
@@ -638,6 +639,58 @@ namespace SectionedTooltips
         }
 
         /// 把刚建好的卡片放到已存估价单的最前；丢掉最旧的、旧设置下建的，以及同一物品更早的：排版缓存每个物品只留一份，物品文字一变，旧估价单就再也显示不出来了。
+        /// <summary>
+        /// 调试用（记录分组日志开着时）：把这张单子的文字块和坐标写成一行日志，
+        /// 游戏外可以用 tool\view.py 拼回预览、跑排版检查。不写任何文件，不需要文件权限。
+        /// </summary>
+        private static void LogSlip(GameItemElement item, RectTransform card, float w, float h)
+        {
+            try
+            {
+                if (card == null) return;
+                StringBuilder sb = new StringBuilder(2048);
+                sb.Append("[slip] ").Append(Clean(DumpName(item)))
+                  .Append(' ').Append(Mathf.Round(w)).Append('x').Append(Mathf.Round(h));
+                TextMeshProUGUI[] texts = card.GetComponentsInChildren<TextMeshProUGUI>(true);
+                Vector3[] corners = new Vector3[4];
+                card.GetWorldCorners(corners);
+                float ox = Mathf.Min(corners[0].x, corners[1].x), oy = Mathf.Max(corners[1].y, corners[2].y);
+                for (int i = 0; i < texts.Length; i++)
+                {
+                    TextMeshProUGUI t = texts[i];
+                    if (t == null || string.IsNullOrEmpty(t.text)) continue;
+                    t.rectTransform.GetWorldCorners(corners);
+                    float x = Mathf.Min(corners[0].x, corners[1].x) - ox;
+                    float top = oy - Mathf.Max(corners[1].y, corners[2].y);
+                    float tw = Mathf.Abs(corners[2].x - corners[0].x);
+                    float th = Mathf.Abs(corners[1].y - corners[0].y);
+                    if (tw <= 0f || th <= 0f) continue;
+                    sb.Append(" | ").Append(Clean(t.text))
+                      .Append('@').Append(Mathf.Round(x)).Append(',').Append(Mathf.Round(top))
+                      .Append(',').Append(Mathf.Round(tw)).Append(',').Append(Mathf.Round(th))
+                      .Append(',').Append(Mathf.Round(t.fontSize));
+                }
+                SectionedTooltipsMod.Log(sb.ToString());
+            }
+            catch (Exception e)
+            {
+                SectionedTooltipsMod.Log("导出这张单子失败：" + e.Message);
+            }
+        }
+
+        private static string DumpName(GameItemElement item)
+        {
+            try { return item != null ? item.GetDisplayName(false) : "?"; }
+            catch { return "?"; }
+        }
+
+        /// 日志里用 | 和 @ 分隔，正文里的这两个字符换成全角，免得解析错位。
+        private static string Clean(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace('|', '｜').Replace('@', '＠').Replace('\n', ' ').Replace('\r', ' ');
+        }
+
         private static void Keep(LayoutResult r, GameItemElement item)
         {
             for (int i = slips.Count - 1; i >= 0; i--)
