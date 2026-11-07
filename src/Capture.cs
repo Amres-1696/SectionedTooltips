@@ -176,6 +176,15 @@ namespace SectionedTooltips
         [HarmonyPriority(Priority.Last)]
         private static void Postfix(GameItemElement __instance, RichTextBuilder __result)
         {
+#if DEVDUMP
+            if (DumpAll.Running && __result != null)
+            {
+                // 全量导出：每件物品自己调 GetTooltipBasic，这里只算分节、写文件
+                try { Layout.Apply(Capture.Top, __result); }
+                catch (Exception e) { Fuse.Fail(Fuse.LayoutKey, e); }
+                return;
+            }
+#endif
             if (__result == null || Capture.Depth != 1) return;
             if (Settings.Enabled != null && !Settings.Enabled.Value) return;
             if (Fuse.IsOpen(Fuse.LayoutKey)) return;
@@ -185,6 +194,9 @@ namespace SectionedTooltips
                 BasicTimer.Stop();
                 BasicMs = BasicTimer.Elapsed.TotalMilliseconds;
             }
+#if DEVDUMP
+            try { DumpAll.Check(); } catch { }
+#endif
             try
             {
                 Layout.Apply(Capture.Top, __result);

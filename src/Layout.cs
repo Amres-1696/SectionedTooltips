@@ -150,6 +150,14 @@ namespace SectionedTooltips
             LiquidInfo liquid = liquidPanel ? ExtractLiquid(lines) : null;
 
             List<Block> blocks = Group(lines);
+#if DEVDUMP
+            if (DumpAll.Running)
+            {
+                DumpAll.Take(f.Item, blocks);
+                LastItem = f.Item;
+                return;
+            }
+#endif
             int iconCells = 0;
             if (Settings.On(Settings.Icon)) iconCells = IconCellsFor(Overlay.IconOf(f.Item));
             LayoutResult result = new LayoutResult();

@@ -1861,12 +1861,12 @@ namespace SectionedTooltips
             return sb.ToString().Trim();
         }
 
-        private static string PlainOf(Row row)
+        internal static string PlainOf(Row row)
         {
             return PlainOf(row.Segs ?? row.Label);
         }
 
-        private static string PlainOf(List<Seg> segs)
+        internal static string PlainOf(List<Seg> segs)
         {
             if (segs == null) return "";
             StringBuilder sb = new StringBuilder();
