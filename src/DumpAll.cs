@@ -36,7 +36,13 @@ namespace SectionedTooltips
             checkedOnce = true;
             try
             {
-                if (!ModHelper.ModDataFileExists(ModId, Flag)) return;
+                if (!ModHelper.ModDataFileExists(ModId, Flag))
+                {
+                    string folder = null;
+                    try { folder = ModHelper.GetModDataFolder(ModId); } catch { }
+                    SectionedTooltipsMod.Log("全量导出：没找到 " + Flag + "，模组数据目录是 " + (folder ?? "?"));
+                    return;
+                }
                 started = true;
                 Run();
             }
