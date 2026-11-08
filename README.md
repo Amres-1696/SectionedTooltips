@@ -63,7 +63,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `tests/` | 无头自检：`tests\test.bat` |
 | `Localization/*.csv` | 文案，目前中英两份 |
 
-`workshop/`（发布素材）和 `build.bat`（本地构建脚本）不进仓库。
+`workshop/`（发布素材）、`build.bat`（本地构建脚本）和 `manifest.dev.xml`（dev 构建的清单）不进仓库。
 
 ## 兼容
 
