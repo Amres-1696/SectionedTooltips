@@ -109,7 +109,12 @@ namespace SectionedTooltips
             if (contentsPanel) hash = unchecked(hash * 397) ^ ContentsInfo.Signature(f.Item);
             if (timer != null) frameSignatureMs = timer.Elapsed.TotalMilliseconds;
             Cached hit = Find(f.Item);
-            if (hit != null && hit.Hash == hash && hit.Version == Settings.Version)
+            bool stress = false;
+#if DEVDUMP
+            // 压力测试要这件物品分节前的行，不能走缓存。
+            stress = Stress.Wanted(f.Item);
+#endif
+            if (hit != null && hit.Hash == hash && hit.Version == Settings.Version && !stress)
             {
                 Swap(b, hit.Output);
                 LastItem = f.Item;
@@ -134,6 +139,8 @@ namespace SectionedTooltips
             List<Line> lines = SplitLines(segs, keyOf, ordOf);
             // Item Details 的区块：把它的行归到对应的小节，不再靠文本猜（没装它时为 null）。
             RekeySections(lines, ItemDetailsSections.Read(b));
+            // AquaSense 的成分条画在原版文字上，估价单看不到：按它的接口换成我们画的条（没装它时什么都不做）。
+            AquaSense.Apply(lines, f.Item);
             SplitCustomName(lines, f.Item);
             MarkDescription(lines, f.Item);
             // 玩家关掉的部分，两种风格都适用。
@@ -149,6 +156,9 @@ namespace SectionedTooltips
                 && Settings.On(Settings.Bars);
             LiquidInfo liquid = liquidPanel ? ExtractLiquid(lines) : null;
 
+#if DEVDUMP
+            if (stress) Stress.Prepare(f.Item, lines, contents);
+#endif
             List<Block> blocks = Group(lines);
 #if DEVDUMP
             if (DumpAll.Running)
@@ -605,7 +615,7 @@ namespace SectionedTooltips
             return false;
         }
 
-        private static List<Block> Group(List<Line> lines)
+        internal static List<Block> Group(List<Line> lines)
         {
             // 宽度设置是给经典风格用的；估价单自己决定换行，这里保持默认值。
             int maxLabel = Math.Max(8, (Settings.IsTicket ? 46 : Settings.MaxChars) * 3 / 5) * TextUnits.Cell;
@@ -640,6 +650,8 @@ namespace SectionedTooltips
                             part.Ord = l.Ord;
                             part.Plain = TextUnits.Plain(pipes[k]);
                             Row pr = MakeRow(part, maxLabel, l.Key != Sections.Module);
+                            // 没冒号的一段（“精工扩舱 0”）按“名字 数值”拆，不然整行会退回去被冒号切出假标签。
+                            if (!pr.IsPair) pr = NameNumberRow(pipes[k], l.Segs) ?? pr;
                             if (!pr.IsPair) { ok = false; break; }
                             split.Add(pr);
                         }
@@ -675,6 +687,8 @@ namespace SectionedTooltips
                     blocks.Add(cur);
                 }
                 cur.Rows.Add(row);
+                // 经典风格里没有标签的行前面会多一个圆点，只给估价单拆。
+                if (row.IsPair && key != Sections.Value && Settings.IsTicket) SplitPercentList(cur, row);
             }
             MergeSplitSections(blocks);
             return blocks;
@@ -707,6 +721,58 @@ namespace SectionedTooltips
             string key = l.Key;
             if (key == Sections.Title || key == Sections.Desc || key == Sections.Value || key == Sections.Label) return null;
             return TextRules.PercentPairs(l.Plain);
+        }
+
+        /// <summary>
+        /// “市场：非法武器走私货物 -5%、日用品救济行动 -3%”：几个事件挤在一个数值里会把单子撑得很宽。
+        /// 每一项都是“名字 ±N%”时拆成一项一行，后面几行不写标签，接在数值列里，颜色照旧。
+        /// </summary>
+        private static void SplitPercentList(Block cur, Row row)
+        {
+            List<Seg> source = row.Value;
+            List<Unit> u = TextUnits.Of(source);
+            List<List<Unit>> items = new List<List<Unit>>();
+            int from = 0;
+            for (int i = 0; i <= u.Count; i++)
+            {
+                if (i < u.Count && (u[i].Tag || (u[i].Text != "、" && u[i].Text != "，" && u[i].Text != ","))) continue;
+                List<Unit> item = TextUnits.TrimEnd(TextUnits.TrimStart(u.GetRange(from, i - from)));
+                string label, value;
+                if (!TextRules.TrailingPercent(TextUnits.Plain(item), out label, out value)) return;
+                items.Add(item);
+                from = i + 1;
+            }
+            if (items.Count < 2) return;
+            row.Value = TextUnits.ToSegs(items[0], source);
+            for (int k = 1; k < items.Count; k++)
+            {
+                Row more = new Row();
+                more.Label = new List<Seg>();
+                more.Value = TextUnits.ToSegs(items[k], source);
+                more.Ord = row.Ord;
+                cur.Rows.Add(more);
+            }
+        }
+
+        /// “精工扩舱 0”“储水箱扩容 0/6”拆成一对，分数照样补进度条；拆不开返回 null。名字和数值各自保留原来的颜色。
+        private static Row NameNumberRow(List<Unit> units, List<Seg> source)
+        {
+            List<Unit> u = TextUnits.TrimEnd(TextUnits.TrimStart(units));
+            string name, number;
+            if (!TextRules.NameNumber(TextUnits.Plain(u), out name, out number)) return null;
+            // 数值是去掉首尾空白后的那段结尾，找到它从第几个单元开始。
+            int at = TextUnits.Plain(u).Length - number.Length, cum = 0, split = -1;
+            for (int i = 0; i < u.Count; i++)
+            {
+                if (cum == at && !u[i].Tag) { split = i; break; }
+                if (!u[i].Tag) cum += u[i].Text.Length;
+            }
+            if (split <= 0) return null;
+            Row r = new Row();
+            r.Label = TextUnits.ToSegs(TextUnits.TrimEnd(u.GetRange(0, split)), source);
+            r.Value = TextUnits.ToSegs(u.GetRange(split, u.Count - split), source);
+            AddFractionBar(r, number);
+            return r;
         }
 
         private static Row PairRow(string[] pair, int ord)

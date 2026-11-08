@@ -99,3 +99,7 @@ gauge_power,Battery
 gauge_liquid,Liquid
 row_status,Status
 sample_battery,Power cell
+gene_header,Genes
+gene_expressed,Expressed
+gene_a,A
+gene_b,B

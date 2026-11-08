@@ -40,12 +40,34 @@ namespace SectionedTooltips
                 if (ParseFraction(s, out a, out b)) return s;
             }
 
+            // “12 / 12 L  幽灵水”“6/6升，98.47% 基础水”：分数后面隔着两个空格、全角空格或逗号跟着说明。
+            int cut = NoteCut(s, s.IndexOf('/'));
+            if (cut > 0)
+            {
+                string head = TrimEnd(s.Substring(0, cut));
+                if (ParseFraction(head, out a, out b)) return head;
+            }
+
             // “耐久度 311/400”：空格前是不含数字的短词，分数在后面。
             int space = s.IndexOfAny(new char[] { ' ', TextUnits.IdeographicSpace });
             if (space <= 0 || space > 6) return null;
             for (int i = 0; i < space; i++) if (char.IsDigit(s[i])) return null;
             string tail = s.Substring(space + 1).Trim();
             return ParseFraction(tail, out a, out b) ? tail : null;
+        }
+
+        /// 斜杠后面第一个说明分隔符的位置：两个半角空格、全角空格、全角逗号，或“逗号+空格”
+        /// （单独的半角逗号可能是千位分隔符）。没有返回 -1。
+        private static int NoteCut(string s, int slash)
+        {
+            if (slash < 0) return -1;
+            for (int i = slash + 1; i < s.Length; i++)
+            {
+                char ch = s[i];
+                if (ch == TextUnits.IdeographicSpace || ch == '，') return i;
+                if ((ch == ' ' || ch == ',') && i + 1 < s.Length && s[i + 1] == ' ') return i;
+            }
+            return -1;
         }
 
         /// <summary>
@@ -164,13 +186,15 @@ namespace SectionedTooltips
         /// 名字不能太长、也不能带句子标点，否则这行是在切一句话，不是在切列表。
         private static bool PlausibleName(string name)
         {
-            if (name.Length == 0 || name.Length > NameMax) return false;
+            if (name.Length == 0) return false;
+            int cells = 0;
             for (int i = 0; i < name.Length; i++)
             {
                 char ch = name[i];
                 if ("。，、；：！？,;:!?".IndexOf(ch) >= 0) return false;
+                cells += TextUnits.IsWide(ch) ? 8 : 3;
             }
-            return true;
+            return cells <= 8 * NameMax;
         }
 
         /// 去掉行首的项目符号（“-多年生” → “多年生”）。
@@ -182,7 +206,7 @@ namespace SectionedTooltips
             return s.Substring(1).TrimStart();
         }
 
-        /// 列表里的名字最多这么多个字。
+        /// 列表里的名字最多这么多个汉字；按宽度算，一个英文字母算 3/8 个（最多 32 个字母，“Illegal weapons smuggling”放得下）。
         private const int NameMax = 12;
 
         /// <summary>
@@ -219,6 +243,51 @@ namespace SectionedTooltips
                 i++;
             }
             return digits > 0 && i == s.Length - 1 && s[i] == '%';
+        }
+
+        /// <summary>
+        /// 没有冒号的“名字 数值”：“精工扩舱 0”“水量 0/12 升”“酒瓶区 6x4”。在一个前面是空格的数字处拆（可带正负号）：
+        /// 数字后面最多跟一个短单位，“水量 0/12 升”拆成“水量”“0/12 升”，单位留在数值里；
+        /// 后面还有别的字就往后找下一个数字，“Tier 2 filter 3/5”拆成“Tier 2 filter”“3/5”。名字不能以数字开头。
+        /// </summary>
+        internal static bool NameNumber(string plain, out string label, out string value)
+        {
+            label = value = null;
+            string s = (plain ?? "").Trim();
+            if (s.Length == 0 || char.IsDigit(s[0])) return false;
+            for (int d = 1; d < s.Length; d++)
+            {
+                if (!char.IsDigit(s[d]) || char.IsDigit(s[d - 1])) continue;
+                int start = d;
+                if (s[start - 1] == '+' || s[start - 1] == '-' || s[start - 1] == '−') start--;
+                if (start < 2 || (s[start - 1] != ' ' && s[start - 1] != TextUnits.IdeographicSpace)) continue;
+                string rest = s.Substring(start);
+                if (!NumberWithUnit(rest)) continue;
+                string head = s.Substring(0, start).Trim();
+                if (!PlausibleName(head)) return false;
+                label = head;
+                value = rest;
+                return true;
+            }
+            return false;
+        }
+
+        /// 一段数（可带 / x × . , 和正负号），后面最多一个不含数字的短单位：“0/12 升”“6x4”“-5”。
+        private static bool NumberWithUnit(string s)
+        {
+            int end = 0;
+            if (end < s.Length && (s[end] == '+' || s[end] == '-' || s[end] == '−')) end++;
+            int digits = 0;
+            while (end < s.Length && (char.IsDigit(s[end]) || ".,/x×".IndexOf(s[end]) >= 0))
+            {
+                if (char.IsDigit(s[end])) digits++;
+                end++;
+            }
+            if (digits == 0) return false;
+            string unit = s.Substring(end).Trim();
+            if (unit.Length > 3) return false;
+            for (int i = 0; i < unit.Length; i++) if (char.IsDigit(unit[i])) return false;
+            return true;
         }
 
         // ---------------------------------------------------------------- 标签

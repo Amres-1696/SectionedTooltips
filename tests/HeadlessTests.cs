@@ -34,6 +34,7 @@ internal static class HeadlessTests
         ItemDetailsShapes();
         PercentLists();
         TrailingPercents();
+        NameNumbers();
     }
 
     // ---------------------------------------------------------------- 用例
@@ -89,6 +90,10 @@ internal static class HeadlessTests
         Check(TextRules.FractionPart("耐久度 311/400（已耗尽，不再过滤）") == "311/400", "带前缀和括号");
         Check(TextRules.FractionPart("2498 ml / 3000 ml") == "2498 ml / 3000 ml", "带单位");
         Check(TextRules.FractionPart("没有数字") == null, "没有分数返回 null");
+        Check(TextRules.FractionPart("12 / 12 L  幽灵水") == "12 / 12 L", "分数后面两个空格跟着名字");
+        Check(TextRules.FractionPart("6/6升，98.47% 基础水") == "6/6升", "分数后面全角逗号跟着说明");
+        Check(TextRules.FractionPart("4 / 100  自充电能量电池") == "4 / 100", "电池读数");
+        Check(TextRules.ReadFraction("1,000/2,000，备注", false, null, null, out a, out b) && a == 1000f && b == 2000f, "千位分隔符不当说明分隔");
 
         // 模板没探到时退回通用规则。
         Check(TextRules.ReadFraction("耐久度 311/400", false, null, null, out a, out b) && a == 311f && b == 400f, "退回通用规则");
@@ -192,6 +197,28 @@ internal static class HeadlessTests
 
 
     /// 没有冒号、行尾是“+25%”的行，前面的短名字当标签。
+    /// 竖线隔开的段里没有冒号的“名字 数值”。
+    private static void NameNumbers()
+    {
+        string label, value;
+        Check(TextRules.NameNumber("精工扩舱 0", out label, out value) && label == "精工扩舱" && value == "0", "精工扩舱 0");
+        Check(TextRules.NameNumber("储水箱扩容 0/6", out label, out value) && value == "0/6", "储水箱扩容 0/6");
+        Check(TextRules.NameNumber("水量 0/12 升", out label, out value) && label == "水量" && value == "0/12 升", "单位留在数值里");
+        Check(TextRules.NameNumber("酒瓶区 6x4", out label, out value) && value == "6x4", "酒瓶区 6x4");
+        Check(TextRules.NameNumber("温度 -5", out label, out value) && value == "-5", "带负号");
+        Check(!TextRules.NameNumber("3号仓 12", out label, out value), "名字里有数字不拆");
+        Check(!TextRules.NameNumber("没有数字", out label, out value), "没有数字不拆");
+        Check(!TextRules.NameNumber("等级12", out label, out value), "数字前没有空格不拆");
+        Check(!TextRules.NameNumber("收获后仍会存活，并再次结果 3", out label, out value), "句子不拆");
+        Check(TextRules.NameNumber("Precision expansion 0", out label, out value) && label == "Precision expansion" && value == "0", "英文长名字");
+        Check(TextRules.NameNumber("Water tank expansion 0/6", out label, out value) && value == "0/6", "Water tank expansion 0/6");
+        Check(TextRules.NameNumber("Tier 2 filter 3/5", out label, out value) && label == "Tier 2 filter" && value == "3/5", "名字中间的数字不拆");
+        Check(TextRules.NameNumber("Mk 2 扩展 1", out label, out value) && label == "Mk 2 扩展" && value == "1", "Mk 2 扩展 1");
+        Check(!TextRules.NameNumber("数值 1.20 (1.17)", out label, out value), "数字后面有括号不拆");
+        Check(!TextRules.NameNumber("一二三四五六七八九十一二三 5", out label, out value), "中文名字超过 12 个字不拆");
+        Check(TextRules.TrailingPercent("Illegal weapons smuggling -35%", out label, out value) && value == "-35%", "英文百分比名字");
+    }
+
     private static void TrailingPercents()
     {
         string label, value;

@@ -49,9 +49,15 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/Contents.cs` | 容器和机器里装了什么、电池和液体的量条 |
 | `src/Panels.cs` | Classic 风格的侧边面板（液位计、内容物格子） |
 | `src/Overlay.cs` | 画在 tooltip 上的图标和进度条 |
+| `src/Icons.cs` | 物品图标的副本：裁掉透明边，按方框大小放大 |
 | `src/SettingsPanel.cs` | 设置面板补丁：滑块数值、色块、示例单 |
 | `src/TicketSample.cs` | 示例单和 Classic 示例 |
 | `src/ItemDetailsBridge.cs` | 和 Item Details 的对接：排版声明、tooltip 锚点 |
+| `src/ItemDetailsSections.cs` | 读 Item Details 的区块协议，把它的行归到对应小节 |
+| `src/AquaSense.cs` | 读《更好的水商操作体验》的成分接口，把它的成分行画成进度条 |
+| `src/ReadableFonts.cs` | 和《字体大小优化》的兼容：它开着时估价单自己放大，字号抬到它不改的范围 |
+| `src/DumpAll.cs` | dev 构建：导出全部物品的分节结果（`dumpall.flag`） |
+| `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`） |
 | `src/TextRules.cs` | 纯文本规则（分数、模板、括号、清单），不引用游戏程序集 |
 | `src/Fuse.cs` | 连续失败熔断 |
 | `tests/` | 无头自检：`tests\test.bat` |
@@ -61,7 +67,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 ## 兼容
 
-可以和 Item Details、Appraisal Assistant 等模组一起用，它们追加的内容归到「附加信息」一节。
+可以和 Item Details、更好的水商操作体验、字体大小优化、Appraisal Assistant 等模组一起用。Item Details 的内容按它声明的归属放进对应小节，水商的成分进度条在估价单上照样画出来；开着字体大小优化时估价单跟着放大，排版不会重叠；其他模组追加的内容归到「附加信息」一节。
 
 不需要任何权限，不修改存档，可以随时添加或移除。
 

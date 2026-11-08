@@ -70,6 +70,8 @@ namespace SectionedTooltips
         private static Vector2 cardSize;
         /// 屏幕高度，用卡片单位表示：比这更高的估价单也会把附加信息和其他节挪到独立一栏。
         private static float slipRoom = float.MaxValue;
+        /// 屏幕宽度，同样用卡片单位：分栏后比这更宽就整张缩小（见 BuildCard 末尾）。
+        private static float slipRoomW = float.MaxValue;
 
         /// 已经建好、藏在根节点下的估价单，回到同一个物品时只需再显示一次。
         private sealed class Built
@@ -131,13 +133,24 @@ namespace SectionedTooltips
             bool hidden = fresh || !root.gameObject.activeSelf;
             // 构建前先激活：TextMeshPro 只给激活状态的文字排版和测量。
             root.gameObject.SetActive(true);
+#if DEVDUMP
+            if (Stress.Pending(item))
+            {
+                float sy0 = Mathf.Abs(root.localScale.y), sx0 = Mathf.Abs(root.localScale.x);
+                Rect screen0 = Panels.ScreenRect(parent, win);
+                slipRoomW = sx0 > 0f ? screen0.width / sx0 : float.MaxValue;
+                RunStress(tmp, item, sy0 > 0f ? screen0.height / sy0 : float.MaxValue);
+            }
+#endif
             bool current = !fresh && card != null && ReferenceEquals(builtFor, r) && ReferenceEquals(builtItem, item);
             if (!current && (Reuse(r, item) || BuildNow(item, hidden)))
             {
                 if (!ReferenceEquals(builtFor, r) || !ReferenceEquals(builtItem, item))
                 {
-                    float sy = Mathf.Abs(root.localScale.y);
-                    slipRoom = sy > 0f ? Panels.ScreenRect(parent, win).height / sy : float.MaxValue;
+                    float sy = Mathf.Abs(root.localScale.y), sx = Mathf.Abs(root.localScale.x);
+                    Rect screen = Panels.ScreenRect(parent, win);
+                    slipRoom = sy > 0f ? screen.height / sy : float.MaxValue;
+                    slipRoomW = sx > 0f ? screen.width / sx : float.MaxValue;
                     Build(tmp, r, item);
                 }
             }
@@ -266,6 +279,10 @@ namespace SectionedTooltips
             /// 各节的制表位列几何（见 TicketGrid.TabLayoutOf）；一次构建里算一次，绘制与宽度共用。
             public readonly Dictionary<Block, Ticket.TabLayout> Tabs = new Dictionary<Block, Ticket.TabLayout>();
             public float Px = 1f;  // 每个卡片单位占多少屏幕像素，图标要对齐整像素（见 PixelFit）
+            public List<Piece> Pieces;  // 分栏用的各块（见 Flow）
+            public bool Fine;           // 每行另起一块，一节可以从中间断到下一栏（单子比窗口高时才这样重建）
+            public float Lift = 1f;     // 字号抬高的倍数，卡片整张缩回这么多（见 ReadableFonts）
+            public float Room = float.MaxValue;  // 窗口高度，用这张卡片的单位
             public float Inner { get { return W - 2f * Pad; } }
             /// 卡片上的实心矩形，合成一个 mesh，画在纸上面、所有文字和图标下面。
             public Quads Q;
@@ -473,7 +490,7 @@ namespace SectionedTooltips
         {
             try
             {
-                BuildCard(tmp, r, item);
+                BuildFlow(tmp, r, item);
                 Fuse.Ok(Fuse.TicketKey);
             }
             catch (Exception e)
@@ -489,6 +506,24 @@ namespace SectionedTooltips
             }
         }
 
+        /// 建单子：比窗口高时按行分块重建一次，这样一节太长也能从中间断到下一栏。平常一节一块，物体少一些。
+        private static void BuildFlow(TMP_Text tmp, LayoutResult r, GameItemElement item)
+        {
+            fineParts = false;
+            wantFine = false;
+            BuildCard(tmp, r, item);
+            if (!wantFine) return;
+            Drop(card);
+            card = null;
+            fineParts = true;
+            try { BuildCard(tmp, r, item); }
+            finally { fineParts = false; }
+        }
+
+        private static bool fineParts, wantFine;
+        /// 上一张单子因为比窗口宽缩到的比例（不含字号抬高的那部分），调试导出用。
+        private static float builtFit = 1f;
+
         private static void BuildCard(TMP_Text tmp, LayoutResult r, GameItemElement item)
         {
             // 上一张卡片留着，只是隐藏，鼠标回到它的物品时直接用。
@@ -501,7 +536,17 @@ namespace SectionedTooltips
 
             Ctx c = new Ctx();
             // Measure 会抵掉根节点的缩放（文字在屏幕上和游戏一样大），所以大小设置要在这里乘进去。
-            c.M = Panels.Measure(tmp, root, Settings.ScaleFactor);
+            // 「字体大小优化」开着时：它会把 16 号以下的字放大（我们排版时不知道，就会重叠）。我们自己先放大 1.2 倍，
+            // 再把所有字号抬到 16 以上、整张按同样比例缩回去，看起来一样大，它也就不再动我们的字（见 ReadableFonts）。
+            float boost = 1f, lift = 1f;
+            if (ReadableFonts.Active)
+            {
+                boost = ReadableFonts.Boost;
+                Panels.Metrics plain = Panels.Measure(tmp, root, Settings.ScaleFactor * boost);
+                lift = Mathf.Max(1f, ReadableFonts.Floor / (plain.Font * MinFontShare));
+            }
+            c.M = Panels.Measure(tmp, root, Settings.ScaleFactor * boost * lift);
+            c.Lift = lift;
             c.Src = tmp;
             c.Card = card = Ui.NewRect(root, "ticket");
             c.U = Mathf.Max(1f, Mathf.Round(c.M.Line / 12f));
@@ -511,7 +556,7 @@ namespace SectionedTooltips
             {
                 canvas = canvas.rootCanvas;
                 float cs = Mathf.Abs(canvas.transform.lossyScale.y), rs = Mathf.Abs(root.lossyScale.y);
-                if (cs > 0f && rs > 0f) c.Px = rs / cs * canvas.scaleFactor;
+                if (cs > 0f && rs > 0f) c.Px = rs / cs * canvas.scaleFactor / lift;
             }
             c.Pad = Mathf.Round(c.M.Line * 0.6f);
             c.Gap = Mathf.Max(2f, Mathf.Round(c.M.Line * 0.25f));
@@ -546,60 +591,80 @@ namespace SectionedTooltips
             for (int i = 0; i < p.Stamps.Count; i++) clear = Mathf.Max(clear, stampY + StampDrop(c, p.Stamps[i], i) + c.Gap);
             y = Price(c, p, y, clear);
             Step("price");
-            // 开放式的小节（其他模组的信息、游戏的“其他”行：它们的块按顺序，放在第一个块原来的位置）以及后面的内容各占一块，这样它们把单子撑太长时可以整体挪到旁边一栏。
-            RectTransform side = null, after = null;
-            float sideTop = 0f, sideEnd = 0f;
+            // 每一节各占一块，单子太高时整块挪到右边新的一栏。开放式的小节（其他模组的信息、游戏的“其他”行）按顺序放在第一个这种块原来的位置，
+            // 它们太多时自己单独起一栏。
+            List<Piece> pieces = new List<Piece>();
+            c.Pieces = pieces;
+            c.Fine = fineParts;
             int sideRows = 0;
+            bool asideDone = false;
             for (int i = 0; i < r.Blocks.Count; i++)
             {
                 Block bl = r.Blocks[i];
                 if (!OnSlip(bl.Key)) continue;
                 if (Aside(bl.Key))
                 {
-                    if (side != null) continue;
-                    sideTop = y;
-                    side = Part(c);
+                    if (asideDone) continue;
+                    asideDone = true;
                     for (int j = i; j < r.Blocks.Count; j++)
-                        if (Aside(r.Blocks[j].Key))
-                        {
-                            sideRows += r.Blocks[j].Rows.Count;
-                            y = Section(c, r.Blocks[j], y);
-                        }
-                    sideEnd = y;
-                    after = Part(c);
+                    {
+                        Block side = r.Blocks[j];
+                        if (!OnSlip(side.Key) || !Aside(side.Key)) continue;
+                        sideRows += side.Rows.Count;
+                        Begin(c, pieces, y, true);
+                        y = Section(c, side, y);
+                        End(c, y);
+                    }
                     continue;
                 }
+                Begin(c, pieces, y, false);
                 y = Section(c, bl, y);
+                End(c, y);
             }
             Step("sections");
-            if (r.Contents != null && r.Contents.Entries.Count > 0) y = Contents(c, r.Contents, y);
+            if (r.Contents != null && r.Contents.Entries.Count > 0)
+            {
+                Begin(c, pieces, y, false);
+                y = Contents(c, r.Contents, y);
+                End(c, y);
+            }
             Step("contents");
+            Begin(c, pieces, y, false);
             y = Description(c, p, item, y);
             y = ModSource(c, item, y);
+            End(c, y);
             Step("description");
-            // 页脚也单独一块，右边一栏更高时它仍留在底部。
+            // 页脚也单独一块，分栏后仍留在第一栏底部。
+            float footTop = y;
             RectTransform foot = Part(c);
             y = Settings.On(Settings.ShowFooter) ? Footer(c, item, y) : y + c.Pad;
+            float footH = y - footTop;
             Step("footer");
 
             float w = c.W, h = Mathf.Round(y);
             c.Card = card;
             c.Q = body;
-            float shift = sideEnd - sideTop;
             // 按行数算，不是量出来的：网格的行距会让六个短行量出来超过八行。
             int lines = Settings.ModsColumnLines;
-            if (side != null && ((lines > 0 && sideRows > lines) || h > slipRoom))
+            // 窗口大小换成这张卡片的单位（字号抬高时卡片单位变小）。
+            c.Room = slipRoom * lift;
+            float roomW = slipRoomW * lift;
+            bool asideColumn = sideRows > 0 && ((lines > 0 && sideRows > lines) || h > c.Room);
+            // 比窗口高：按行分块重新建一次（BuildFlow），这张半成品不要了。
+            if (h > c.Room && !c.Fine)
             {
-                float mainH = h - shift;
-                // 让它的第一个标签和名字顶部齐平，像名字下面开始的一节。
-                float dy = c.Pad - sideTop - c.Gap * 1.5f;
-                h = Mathf.Round(Mathf.Max(mainH, sideEnd + dy + c.Pad));
-                Ui.Move(side, c.W, dy);
-                Ui.Move(after, 0f, -shift);
-                Ui.Move(foot, 0f, h - mainH - shift);
-                w = 2f * c.W;
-                // 两栏之间打一排孔，和上下边缘一样。
-                for (float py = c.Pad; py + 3f * c.U <= h - c.Pad; py += 5f * c.U) Solid(c, PaperEdge, c.W, py, c.U, 3f * c.U);
+                wantFine = true;
+                return;
+            }
+            if (asideColumn || h > c.Room)
+            {
+                float head = pieces.Count > 0 ? pieces[0].Top : footTop;
+                int cols = Flow(c, pieces, head, footH, asideColumn, out h);
+                Ui.Move(foot, 0f, h - footH - footTop);
+                w = cols * c.W;
+                // 栏与栏之间打一排孔，和上下边缘一样。
+                for (int k = 1; k < cols; k++)
+                    for (float py = c.Pad; py + 3f * c.U <= h - c.Pad; py += 5f * c.U) Solid(c, PaperEdge, k * c.W, py, c.U, 3f * c.U);
             }
             Dashes(c, c.Pad * 0.5f, c.Pad * 0.5f, w - c.Pad, 3f * c.U, 2f * c.U, c.U, PaperEdge);
             Dashes(c, c.Pad * 0.5f, h - c.Pad * 0.5f, w - c.Pad, 3f * c.U, 2f * c.U, c.U, PaperEdge);
@@ -614,7 +679,11 @@ namespace SectionedTooltips
                 if (q != null) Ui.Place(q, 0f, 0f, w, h);
             }
             Ui.Place(card, 0f, 0f, w, h);
-            cardSize = new Vector2(w, h);
+            // 栏太多、比窗口还宽：整张按比例缩小，宁可字小一点也不能有一截跑到屏幕外。
+            float fit = w > roomW ? roomW / w : 1f;
+            card.localScale = new Vector3(fit / lift, fit / lift, 1f);
+            builtFit = fit;
+            cardSize = new Vector2(w * fit / lift, h * fit / lift);
 
             // 印章最后画，盖在纸和价格行上面。
             for (int i = 0; i < p.Stamps.Count; i++) Stamp(c, p.Stamps[i], stampY, i);
@@ -627,7 +696,15 @@ namespace SectionedTooltips
                 g.interactable = false;
                 g.blocksRaycasts = false;
             }
-            if (Settings.Debug != null && Settings.Debug.Value) LogSlip(item, card, w, h);
+            bool log = Settings.Debug != null && Settings.Debug.Value;
+#if DEVDUMP
+            if (Stress.Label != null)
+            {
+                Stress.AfterBuild(card);
+                log = true;
+            }
+#endif
+            if (log) LogSlip(item, card, w, h);
             Keep(r, item);
             if (probe == null) return;
             Step("finish");
@@ -679,20 +756,36 @@ namespace SectionedTooltips
                 SectionedTooltipsMod.Log(sb.ToString());
 
                 // 矩形（底板、进度条、色块、虚线）另起一行：和纸一样是画出来的，不是文字。
-                Quads quads = card.GetComponentInChildren<Quads>(true);
-                if (quads != null)
+                // 每一块（分栏用的 Part）都有自己的矩形 mesh，全部导出，换算到卡片坐标。
+                Quads[] all = card.GetComponentsInChildren<Quads>(true);
+                if (all.Length > 0)
                 {
                     StringBuilder qb = new StringBuilder(4096);
                     qb.Append("[quad] ").Append(Clean(DumpName(item)));
-                    for (int i = 0; i < quads.Count; i++)
+                    for (int k = 0; k < all.Length; k++)
                     {
-                        Rect r = quads.RectAt(i);
-                        qb.Append(" | ").Append(Mathf.Round(r.x)).Append(',').Append(Mathf.Round(r.y))
-                          .Append(',').Append(Mathf.Round(r.width)).Append(',').Append(Mathf.Round(r.height))
-                          .Append(',').Append(Hex(quads.ColorAt(i)));
+                        Quads quads = all[k];
+                        float dx = 0f, dy = 0f;
+                        for (Transform t = quads.transform; t != null && t != card; t = t.parent)
+                        {
+                            RectTransform rt = t as RectTransform;
+                            if (rt == null) continue;
+                            dx += rt.anchoredPosition.x;
+                            dy -= rt.anchoredPosition.y;
+                        }
+                        for (int i = 0; i < quads.Count; i++)
+                        {
+                            Rect r = quads.RectAt(i);
+                            qb.Append(" | ").Append(Mathf.Round(r.x + dx)).Append(',').Append(Mathf.Round(r.y + dy))
+                              .Append(',').Append(Mathf.Round(r.width)).Append(',').Append(Mathf.Round(r.height))
+                              .Append(',').Append(Hex(quads.ColorAt(i)));
+                        }
                     }
                     SectionedTooltipsMod.Log(qb.ToString());
                 }
+                if (slipRoom < float.MaxValue && slipRoomW < float.MaxValue)
+                    SectionedTooltipsMod.Log(string.Format(CultureInfo.InvariantCulture, "[room] {0} {1:F0} {2:F0} {3:F4} {4:F2}",
+                        Clean(DumpName(item)), slipRoom, slipRoomW, card.localScale.x, builtFit));
             }
             catch (Exception e)
             {
@@ -702,8 +795,13 @@ namespace SectionedTooltips
 
         private static string DumpName(GameItemElement item)
         {
-            try { return item != null ? item.GetDisplayName(false) : "?"; }
-            catch { return "?"; }
+            string name;
+            try { name = item != null ? item.GetDisplayName(false) : "?"; }
+            catch { name = "?"; }
+#if DEVDUMP
+            if (Stress.Label != null) return "压力:" + Stress.Label + " · " + name;
+#endif
+            return name;
         }
 
         private static string Hex(Color c)
@@ -721,6 +819,10 @@ namespace SectionedTooltips
 
         private static void Keep(LayoutResult r, GameItemElement item)
         {
+#if DEVDUMP
+            // 压力测试的单子建完就丢，不能挤掉存着的（尤其是同一件物品自己的那张）。
+            if (Stress.Label != null) return;
+#endif
             for (int i = slips.Count - 1; i >= 0; i--)
             {
                 Built s = slips[i];
@@ -921,15 +1023,17 @@ namespace SectionedTooltips
             float widest = Mathf.Round(c.M.Line * NameMaxLines);
 
             // 长名字会把单子撑宽，比正文允许的更宽，而不是折成两行。偏移和 Title 一样，多一个像素，免得取整把最后一个字挤出去。
+            // 名字下面的标签、特性行最多撑到正文的上限，再长就折行（标签本来就会换行排），不跟着名字一起放宽。
             if (p.Name != null)
             {
-                float text = c.Measure(InkRich(p.Name.Segs, Ink), c.F * 1.15f);
+                float lead = (IconFor(builtItem) != null ? IconBox(c) + c.Gap * 1.5f : 0f) + c.U + 2f * c.Pad;
+                float extra = 0f;
                 for (int i = 0; i < p.Extras.Count; i++)
-                    text = Mathf.Max(text, p.Chips[i] != null ? ChipsWidth(c, p.Chips[i]) : c.Measure(InkRich(p.Extras[i].Segs, InkSoft, false), c.F * 0.8f));
-                if (p.Features.Count > 0) text = Mathf.Max(text, c.Measure(FeaturesRich(p), c.F * 0.8f));
-                if (p.Stolen != null) text = Mathf.Max(text, c.Measure(StolenLabel(p.Stolen), small) + 6f * c.U);
-                float title = (IconFor(builtItem) != null ? IconBox(c) + c.Gap * 1.5f : 0f) + text + c.U + 2f * c.Pad;
-                w = Mathf.Max(w, Mathf.Min(title, widest));
+                    extra = Mathf.Max(extra, p.Chips[i] != null ? ChipsWidth(c, p.Chips[i]) : c.Measure(InkRich(p.Extras[i].Segs, InkSoft, false), c.F * 0.8f));
+                if (p.Features.Count > 0) extra = Mathf.Max(extra, c.Measure(FeaturesRich(p), c.F * 0.8f));
+                if (p.Stolen != null) extra = Mathf.Max(extra, c.Measure(StolenLabel(p.Stolen), small) + 6f * c.U);
+                w = Mathf.Max(w, Mathf.Min(lead + c.Measure(InkRich(p.Name.Segs, Ink), c.F * 1.15f), widest));
+                w = Mathf.Max(w, Mathf.Min(lead + extra, max));
             }
 
             // 价格行不能换行：大字价格、它的注解（“进价 137+18”，装了 Item Details 更长）和旁边的印章；以前长注解会跑到印章下面。
@@ -1029,20 +1133,36 @@ namespace SectionedTooltips
             outH = sh * s / c.Px;
         }
 
-        /// 图标居中放在 box 见方、四边内缩 pad 的框里，对齐整屏幕像素。
+        /// 图标居中放在 box 见方、四边内缩 pad 的框里，对齐整屏幕像素。透明边裁掉后撑满框（见 Icons），裁不了时按整数倍画原图。
         private static void PlaceIcon(Ctx c, Sprite icon, float x, float y, float box, float pad)
         {
             float iw, ih;
-            PixelFit(c, icon, box - 2f * pad, box - 2f * pad, out iw, out ih);
+            Sprite sprite = Icons.Fit(icon, box - 2f * pad, box - 2f * pad, c.Px, out iw, out ih);
+            if (sprite == null)
+            {
+                sprite = icon;
+                PixelFit(c, icon, box - 2f * pad, box - 2f * pad, out iw, out ih);
+            }
             if (iw <= 0f) return;
             Image img = Ui.NewImage(c.Card, Color.white);
-            img.sprite = icon;
+            img.sprite = sprite;
             Ui.Place(img, Snap(c, x + (box - iw) / 2f), Snap(c, y + (box - ih) / 2f), iw, ih);
         }
 
         private static float Snap(Ctx c, float v)
         {
             return Mathf.Round(v * c.Px) / c.Px;
+        }
+
+        private static readonly List<Sprite> iconBatch = new List<Sprite>();
+
+        /// 网格里前 shown 格的图标一起读出来（见 Icons.Prepare）。
+        internal static void PrepareIcons(List<ContentEntry> entries, int shown)
+        {
+            iconBatch.Clear();
+            for (int i = 0; i < shown && i < entries.Count; i++) iconBatch.Add(Overlay.IconOf(entries[i].Item));
+            Icons.Prepare(iconBatch);
+            iconBatch.Clear();
         }
 
         /// 标题用的物品图标；没有图标或设置关掉时为 null。
@@ -1171,6 +1291,73 @@ namespace SectionedTooltips
             return key != Sections.Title && key != Sections.Value && key != Sections.Desc && key != Sections.Container && key != Sections.Label;
         }
 
+        /// 估价单上的一块：一节、内容物或描述，画在自己的子节点里，分栏时整块移动。Top/Bottom 是画的时候的位置。
+        private sealed class Piece
+        {
+            public RectTransform Part;
+            public float Top, Bottom;
+            public bool Aside;
+        }
+
+        /// 当前这块画到 y 为止。
+        private static void End(Ctx c, float y)
+        {
+            if (c.Pieces.Count > 0) c.Pieces[c.Pieces.Count - 1].Bottom = y;
+        }
+
+        /// 按行分块时，在这一行前面断开：前一块到此为止，后面画进新的一块。
+        private static void Split(Ctx c, float y)
+        {
+            if (!c.Fine || c.Pieces == null || c.Pieces.Count == 0) return;
+            Piece cur = c.Pieces[c.Pieces.Count - 1];
+            if (y <= cur.Top) return;
+            cur.Bottom = y;
+            Begin(c, c.Pieces, y, cur.Aside);
+        }
+
+        private static Piece Begin(Ctx c, List<Piece> pieces, float y, bool aside)
+        {
+            Piece p = new Piece();
+            p.Part = Part(c);
+            p.Top = p.Bottom = y;
+            p.Aside = aside;
+            pieces.Add(p);
+            return p;
+        }
+
+        /// <summary>
+        /// 把各块排进几栏，每栏不超过窗口高度：第一栏接着价格往下排，后面的栏从顶上开始（第一个标签和名字顶部齐平），放不下就开新的一栏。
+        /// asideColumn 时开放式的小节另起一栏。返回栏数，h 是分栏后的单子高度（页脚在第一栏底部）。
+        /// </summary>
+        private static int Flow(Ctx c, List<Piece> pieces, float head, float footH, bool asideColumn, out float h)
+        {
+            float top = c.Pad - c.Gap * 1.5f;
+            int col = 0;
+            float colY = head, first = head, rest = 0f;
+            bool empty = true, inAside = false;
+            for (int i = 0; i < pieces.Count; i++)
+            {
+                Piece p = pieces[i];
+                float ph = p.Bottom - p.Top;
+                if (ph <= 0f) { Ui.Move(p.Part, col * c.W, colY - p.Top); continue; }
+                bool start = asideColumn && p.Aside && !inAside;
+                if (p.Aside) inAside = true;
+                float room = col == 0 ? c.Room - footH : c.Room - c.Pad;
+                // 一栏里至少放一块，单独一块比窗口还高也只能让它超出去。
+                if (start || (!empty && colY + ph > room))
+                {
+                    col++;
+                    colY = top;
+                }
+                Ui.Move(p.Part, col * c.W, colY - p.Top);
+                colY += ph;
+                empty = false;
+                if (col == 0) first = colY; else rest = Mathf.Max(rest, colY);
+            }
+            h = Mathf.Round(Mathf.Max(first + footH, rest + c.Pad));
+            return col + 1;
+        }
+
         /// 可能很长、长到要单独占一栏的小节：其他模组的信息和“其他”。
         private static bool Aside(string key)
         {
@@ -1293,7 +1480,7 @@ namespace SectionedTooltips
         /// 游戏画的进度条，用它的颜色转成墨。
         private static void DrawBar(Ctx c, BarMark bar, float x, float yTop, float w, float lineH)
         {
-            Meter(c, bar.Ratio, InkOf(bar.Color, Ink), x, yTop, w, lineH);
+            Meter(c, bar.Ratio, BarInk(bar), x, yTop, w, lineH);
         }
 
 
@@ -1318,6 +1505,7 @@ namespace SectionedTooltips
 
             // 只有一件物品就只画图标：只围一个框会看着像按钮。
             bool bare = cells == 1;
+            PrepareIcons(entries, shown);
             for (int i = 0; i < cells; i++)
             {
                 float x = left + (i % cols) * (cell + gap);
@@ -1770,6 +1958,8 @@ namespace SectionedTooltips
 
         /// 印章主文字和副文字的字号，相对正文字号。
         private const float StampMain = 0.8f, StampSub = 0.6f;
+        /// 单子上最小的字号相对正文的比例（印章的小字），抬字号时按它算。
+        private const float MinFontShare = StampSub;
         /// 印章每边的边框和内边距，按像素：外线 2、间隔 1、内线 1、内边距 1。
         private const float StampEdge = 5f;
 
@@ -1829,7 +2019,12 @@ namespace SectionedTooltips
         private static Color InkOf(Palette p, Color fallback)
         {
             if (p == Palette.None) return fallback;
-            Color c = Overlay.ToColor(p, Palette.Gray);
+            return InkOf(Overlay.ToColor(p, Palette.Gray), fallback);
+        }
+
+        /// 任意颜色调到纸上：保留色相，按纸色压暗或提亮；太灰的用 fallback。
+        private static Color InkOf(Color c, Color fallback)
+        {
             float h, s, v;
             Color.RGBToHSV(c, out h, out s, out v);
             if (s < 0.25f) return fallback;

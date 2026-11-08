@@ -295,6 +295,7 @@ namespace SectionedTooltips
             RectTransform p = NewPanel("contents", frame, w, h);
             Header(p, m, Sections.Container, title, w);
 
+            Ticket.PrepareIcons(entries, shown);
             Color slot = new Color(0f, 0f, 0f, 0.35f);
             Color edge = new Color(1f, 1f, 1f, 0.07f);
             for (int i = 0; i < cells; i++)
@@ -316,9 +317,14 @@ namespace SectionedTooltips
                 if (icon != null)
                 {
                     float iw, ih;
-                    Overlay.Fit(icon, cell - 4f, cell - 4f, out iw, out ih);
+                    Sprite sprite = Icons.Fit(icon, cell - 4f, cell - 4f, Icons.PxOf(p), out iw, out ih);
+                    if (sprite == null)
+                    {
+                        sprite = icon;
+                        Overlay.Fit(icon, cell - 4f, cell - 4f, out iw, out ih);
+                    }
                     Image img = NewImage(p, Color.white);
-                    img.sprite = icon;
+                    img.sprite = sprite;
                     Place(img, x + Mathf.Round((cell - iw) / 2f), y + Mathf.Round((cell - ih) / 2f), iw, ih);
                 }
                 if (entries[i].Count > 1)

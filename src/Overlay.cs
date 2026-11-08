@@ -208,7 +208,12 @@ namespace SectionedTooltips
             float roomH = top - bottom;
             if (roomW < 4f || roomH < 4f) return;
             float w, h;
-            Fit(icon, roomW, roomH, out w, out h);
+            Sprite sprite = Icons.Fit(icon, roomW, roomH, Icons.PxOf(root), out w, out h);
+            if (sprite == null)
+            {
+                sprite = icon;
+                Fit(icon, roomW, roomH, out w, out h);
+            }
             if (w <= 0f) return;
 
             // 挨着名字：顶对齐；比第一行矮就居中在第一行。
@@ -216,7 +221,7 @@ namespace SectionedTooltips
             float y = h < lineH ? a.descender + Mathf.Floor((lineH - h) / 2f) : top - h;
 
             Image img = Take();
-            img.sprite = icon;
+            img.sprite = sprite;
             img.color = Color.white;
             Place(img, left, y, w, h);
         }

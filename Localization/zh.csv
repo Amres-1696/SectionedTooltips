@@ -99,3 +99,7 @@ gauge_power,电池
 gauge_liquid,液体
 row_status,状态
 sample_battery,能量电池
+gene_header,基因
+gene_expressed,表现
+gene_a,A
+gene_b,B
