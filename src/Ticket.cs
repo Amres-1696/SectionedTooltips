@@ -271,6 +271,7 @@ namespace SectionedTooltips
         {
             public Panels.Metrics M;
             public TMP_Text Src;
+            public GameItem Item;
             public RectTransform Card;
             public TextMeshProUGUI Scratch;
             public float U;      // 像素风里的一个“像素”
@@ -572,6 +573,7 @@ namespace SectionedTooltips
             c.M = Panels.Measure(tmp, root, Settings.ScaleFactor * boost * lift);
             c.Lift = lift;
             c.Src = tmp;
+            c.Item = item;
             c.Card = card = Ui.NewRect(root, "ticket");
             c.U = Mathf.Max(1f, Mathf.Round(c.M.Line / 12f));
             // canvas scaler 的系数是每个 canvas 单位多少屏幕像素，屏幕空间各种模式都适用。

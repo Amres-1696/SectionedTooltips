@@ -12,6 +12,7 @@ namespace SectionedTooltips
     internal static class LocTemplates
     {
         private const string DurabilityKey = "mech_durability_display";
+        private const string StorageTabsKey = "mech_storage_bay_tabs";
 
         // 三位数哨兵：模板里不会有别的数字，也基本不会被千位分隔符拆开。
         private const int SentinelNow = 987;
@@ -20,6 +21,7 @@ namespace SectionedTooltips
         private static string checkedLocale;
         private static bool known;
         private static string prefix = "", mid = "";
+        private static string storageTabs = "";
 
         /// <summary>是否探到了模板。</summary>
         internal static bool Known { get { return known; } }
@@ -27,6 +29,9 @@ namespace SectionedTooltips
         /// <summary>模板里第一个数字前面、两个数字中间的字面量。</summary>
         internal static string Prefix { get { return prefix; } }
         internal static string Mid { get { return mid; } }
+
+        /// <summary>储藏区“储物标签页 1/5”那一行的标签（去掉冒号）；没探到时为空。</summary>
+        internal static string StorageTabs { get { return storageTabs; } }
 
         /// <summary>换语言后重探一次；同一个语言里只做一次。</summary>
         internal static void Check()
@@ -37,6 +42,7 @@ namespace SectionedTooltips
             if (locale == checkedLocale) return;
             checkedLocale = locale;
             known = false;
+            storageTabs = ProbeLabel(StorageTabsKey);
             string sample;
             try { sample = LocHelper.GetLocalizedMechanic(DurabilityKey, new object[] { SentinelNow, SentinelMax }); }
             catch { return; }
@@ -47,6 +53,20 @@ namespace SectionedTooltips
             prefix = head;
             mid = between;
             known = true;
+        }
+
+        /// 两个数字的模板里第一个数字前面的字，去掉空白和冒号；探不到返回空串。
+        private static string ProbeLabel(string key)
+        {
+            try
+            {
+                string sample = LocHelper.GetLocalizedMechanic(key, new object[] { SentinelNow, SentinelMax });
+                string head, between, tail;
+                TextRules.SplitTemplate(sample, SentinelNow.ToString(CultureInfo.InvariantCulture),
+                    SentinelMax.ToString(CultureInfo.InvariantCulture), out head, out between, out tail);
+                return head == null ? "" : head.Trim().TrimEnd(':', '：').Trim();
+            }
+            catch { return ""; }
         }
     }
 }

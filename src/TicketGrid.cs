@@ -1060,6 +1060,12 @@ namespace SectionedTooltips
             float h = Mathf.Max(lh, GridLabel(c, label, y));
             float x = ValueX(c), w = BarW(c), gap = c.U;
             float piece = Mathf.Floor((w - (u.Max - 1) * gap) / u.Max);
+            if (TabsAsNumbers(c, u))
+            {
+                // 页码本身就说了有几页，后面不再写“5/5”。
+                TabNumbers(c, u, x, y, w, lh);
+                return y + Mathf.Max(h, lh) + RowGap(c);
+            }
             if (u.Max > MaxPips || piece < 2f * c.U) Meter(c, (float)u.Level / u.Max, Ink, x, y, w, lh);
             else
             {
@@ -1076,8 +1082,58 @@ namespace SectionedTooltips
             return y + h + RowGap(c);
         }
 
+        /// 储藏区的“储物标签页 1/5”（已有几页、最多几页）。
+        private static bool StorageTabs(Upgrade u)
+        {
+            string name = LocTemplates.StorageTabs;
+            return name.Length > 0 && u.Need.Length == 0 && u.Name.Trim().TrimEnd(':', '：').Trim() == name;
+        }
+
+        /// 储藏区当前打开的是第几页（从 0 起）；没打开过、读不到时返回 -1。
+        private static int OpenTab(GameItem item)
+        {
+            try
+            {
+                PixelWindow w = item != null ? item.contentWindow : null;
+                MachineryPanelRow row = w != null ? w.childElement as MachineryPanelRow : null;
+                MachineryPanel panel = row != null ? row.GetPanel("storage") : null;
+                MachineryTabs tabs = panel != null ? panel.content as MachineryTabs : null;
+                return tabs != null && tabs.count > 1 ? tabs.selected : -1;
+            }
+            catch { return -1; }
+        }
+
+        /// 储物标签页写成页码，格子够宽才这样（字放不下时还是格子加“1/5”）。
+        private static bool TabsAsNumbers(Ctx c, Upgrade u)
+        {
+            if (!StorageTabs(u)) return false;
+            float piece = Mathf.Floor((BarW(c) - (u.Max - 1) * c.U) / u.Max);
+            return piece >= c.Measure("5", RowSize(c));
+        }
+
+        /// 储物标签页只写页码“1 2 3 4 5”：已有的页深色，还没有的浅色，当前打开的那页下面画一道线。
+        private static void TabNumbers(Ctx c, Upgrade u, float x, float y, float w, float lh)
+        {
+            float gap = c.U;
+            float piece = Mathf.Floor((w - (u.Max - 1) * gap) / u.Max);
+            float step = u.Max > 1 ? (w - piece) / (u.Max - 1) : 0f;
+            int open = OpenTab(c.Item);
+            Color faint = Color.Lerp(Paper, InkSoft, darkPaper ? 0.65f : 0.62f);
+            for (int i = 0; i < u.Max; i++)
+            {
+                bool have = i < u.Level;
+                string n = (i + 1).ToString(CultureInfo.InvariantCulture);
+                TextMeshProUGUI t = Text(c, RowSize(c), Tint(n, have ? Ink : faint), Color.white, 0f);
+                Vector2 ts = t.rectTransform.sizeDelta;
+                float tx = Mathf.Round(x + i * step + (piece - ts.x) / 2f), ty = Mathf.Round(y + (lh - ts.y) / 2f);
+                Ui.Move(t.rectTransform, tx, ty);
+                if (i == open) Solid(c, Ink, tx, ty + ts.y - c.U, ts.x, 2f * c.U);
+            }
+        }
+
         private static float UpgradeWidth(Ctx c, Upgrade u)
         {
+            if (TabsAsNumbers(c, u)) return PipsWidth(c, u);
             return PipsWidth(c, u) + c.Gap + c.Measure(LevelText(u), RowSize(c)) + 2f * c.Gap + c.Measure(UpgradeNote(u), NoteSize(c));
         }
 
