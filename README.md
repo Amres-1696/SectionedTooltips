@@ -59,6 +59,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/Expand.cs` | 平时收起、按住展开键看完整估价单 |
 | `src/DumpAll.cs` | dev 构建：导出全部物品的分节结果（`dumpall.flag`） |
 | `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`） |
+| `src/Shots.cs` | dev 构建：把显示过的估价单截图存进模组数据目录（`shots.flag`） |
 | `src/TextRules.cs` | 纯文本规则（分数、模板、括号、清单），不引用游戏程序集 |
 | `src/Fuse.cs` | 连续失败熔断 |
 | `tests/` | 无头自检：`tests\test.bat` |

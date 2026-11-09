@@ -163,6 +163,9 @@ namespace SectionedTooltips
             Position(parent, win);
             Raise();
             Fade(win);
+#if DEVDUMP
+            if (card != null) Shots.Seen(card, DumpName(item) + (builtFull ? (Expand.Enabled ? " 展开" : "") : " 收起"));
+#endif
         }
 
         internal static void Hide()
