@@ -247,6 +247,8 @@ namespace SectionedTooltips
             bool module = bl.Key == Sections.Module, stats = false, affixes = false;
             bool labelled = Labelled(bl), strip = StripsBrackets(c, bl);
             TabLayout tab = TabLayoutOf(c, bl);
+            bool liquid = bl.Key == Sections.Liquid, ruled = false;
+            NumCols nums = liquid ? NumColsOf(c, bl) : null;
             // 小标题（“升级：”、“模组效果：”）给它下面没有自己标签的行当标签。
             string pending = null;
             bool headed = false;   // 正处在某个小标题管着的行里
@@ -306,14 +308,14 @@ namespace SectionedTooltips
                     if (row.Wide) { y = ModifierRow(c, row, y); continue; }
                     if (GeneOf(bl, row) != null) { y = Genes(c, bl, ref i, y); continue; }
                     Row reading = Reading(bl, i);
-                    y = GridPair(c, row, reading, strip, y);
+                    y = GridPair(c, row, reading, strip, y, NumColsOf(c, bl));
                     if (reading != null) i++;
                     continue;
                 }
                 List<Row> parts = PipeParts(row);
                 if (parts != null)
                 {
-                    for (int k = 0; k < parts.Count; k++) y = GridPair(c, parts[k], null, false, y);
+                    for (int k = 0; k < parts.Count; k++) y = GridPair(c, parts[k], null, false, y, null);
                     continue;
                 }
                 if (row.Cells != null && tab != null)
@@ -321,7 +323,15 @@ namespace SectionedTooltips
                     // 制表位行自己按列落位，不参与标签列。
                     if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, y);
                     pending = null;
-                    y = GridCells(c, row, tab, left, y);
+                    // 液体里带条的成分表下面紧接着物品详情的成分表：中间一道虚线，读得出是两张表。
+                    if (liquid && i > 0 && !ruled)
+                    {
+                        ruled = true;
+                        y += c.Gap * 0.5f;
+                        Dashes(c, left, y, c.W - c.Pad - left, 3f * c.U, 2f * c.U, c.U, PaperEdge);
+                        y += c.U + c.Gap * 0.5f;
+                    }
+                    y = GridCells(c, row, tab, left, y, nums, liquid);
                     continue;
                 }
                 bool negative;
@@ -389,7 +399,7 @@ namespace SectionedTooltips
         }
 
         /// “标签  数值”，有进度条就从数值列开头画。reading（下面那条只有读数的行）把它的进度条和读数放到这一行，在数值前面。
-        private static float GridPair(Ctx c, Row row, Row reading, bool strip, float y)
+        private static float GridPair(Ctx c, Row row, Row reading, bool strip, float y, NumCols nums)
         {
             float lh = LineH(c);
             string note;
@@ -414,6 +424,8 @@ namespace SectionedTooltips
                 Meter(c, bar.Ratio, BarInk(bar), x, y, BarW(c), lh);
                 x += BarW(c) + c.Gap;
                 if (reading == null) value = Unparen(value);
+                List<List<Seg>> cells = nums != null && reading == null ? NumCells(value) : null;
+                if (cells != null) return NumRow(c, nums, cells, x, y, h);
             }
             float right = c.W - c.Pad;
             if (note.Length > 0)
@@ -425,6 +437,135 @@ namespace SectionedTooltips
                 right -= tw + 2f * c.Gap;
             }
             h = Mathf.Max(h, GridText(c, PairValue(value, reading), RowSize(c), x, y, right));
+            return y + h + RowGap(c);
+        }
+
+        /// 液体一节带条的成分行（“水 ▬▬ 7536.374 ml  99.00%”）条后面那几个数：每列多宽，整组多宽。
+        internal sealed class NumCols
+        {
+            internal float[] W;
+            internal float Gap;
+            internal float Width;
+        }
+
+        /// 条后面的数值按两个以上空格切成几格，每格都以数字开头时返回这些格，否则 null。
+        private static List<List<Seg>> NumCells(List<Seg> value)
+        {
+            // 条本身（游戏的或其他模组按占位画的）也是数值里的一段，不算文字。
+            List<Seg> text = new List<Seg>(value.Count);
+            for (int i = 0; i < value.Count; i++) if (value[i].Bar == null) text.Add(value[i]);
+            value = text;
+            List<List<Unit>> cells = TextUnits.SplitCells(TextUnits.Of(value));
+            if (cells == null) return null;
+            List<List<Seg>> r = new List<List<Seg>>(cells.Count);
+            for (int k = 0; k < cells.Count; k++)
+            {
+                if (!TextRules.StartsWithNumber(TextUnits.Plain(cells[k]).Trim())) return null;
+                r.Add(TextUnits.ToSegs(cells[k], value));
+            }
+            return r;
+        }
+
+        /// 液体一节里至少两行带条的成分行时，它们条后面的数字共用的列；不是这种节返回 null。一次构建算一次。
+        private static NumCols NumColsOf(Ctx c, Block bl)
+        {
+            NumCols cached;
+            if (c.Nums.TryGetValue(bl, out cached)) return cached;
+            NumCols nums = null;
+            if (bl.Key == Sections.Liquid)
+            {
+                float size = RowSize(c);
+                float[] w = new float[0];
+                int rows = 0;
+                for (int i = 0; i < bl.Rows.Count; i++)
+                {
+                    Row row = bl.Rows[i];
+                    if (!row.IsPair || row.Wide || Reading(bl, i) != null) continue;
+                    List<Seg> value = row.Value;
+                    if (SplitBar(ref value) == null) continue;
+                    List<List<Seg>> cells = NumCells(Unparen(value));
+                    if (cells == null) continue;
+                    rows++;
+                    if (cells.Count > w.Length) Array.Resize(ref w, cells.Count);
+                    for (int k = 0; k < cells.Count; k++)
+                    {
+                        int col = TabLayout.Column(k, cells.Count, w.Length);
+                        w[col] = Mathf.Max(w[col], c.Measure(ValueRich(cells[k]), size));
+                    }
+                }
+                // 物品详情那张成分表的数字也对齐到这几列，列宽要放得下它们。
+                for (int i = 0; rows >= 2 && i < bl.Rows.Count; i++)
+                {
+                    List<List<Seg>> cells = bl.Rows[i].Cells;
+                    if (cells == null || cells.Count < 2) continue;
+                    bool numbers = true;
+                    for (int k = 1; k < cells.Count; k++) if (!TextRules.StartsWithNumber(PlainOf(cells[k]).Trim())) numbers = false;
+                    if (!numbers) continue;
+                    for (int k = 1; k < cells.Count; k++)
+                    {
+                        int col = TabLayout.Column(k - 1, cells.Count - 1, w.Length);
+                        w[col] = Mathf.Max(w[col], c.Measure(CellRich(cells[k], false), size));
+                    }
+                }
+                if (rows >= 2)
+                {
+                    nums = new NumCols();
+                    nums.W = w;
+                    nums.Gap = Mathf.Round(c.Gap * TabGapFactor);
+                    for (int k = 0; k < w.Length; k++) nums.Width += w[k] + (k > 0 ? nums.Gap : 0f);
+                }
+            }
+            c.Nums[bl] = nums;
+            return nums;
+        }
+
+        /// 液体表里的一格：名称用标签的淡墨，数字用墨色，都不加粗（和其他节的“标签 数值”一样）。
+        private static string CellRich(List<Seg> cell, bool name)
+        {
+            string rich = name ? InkRich(cell, InkSoft, false) : ValueInks(cell);
+            return rich.Replace("<b>", "").Replace("</b>", "");
+        }
+
+        /// 物品详情成分表的一行（“水 7.54L 99.00%”）能不能把数字对齐到上面带条那张表的数字列：后面几格都是数字，名称放得进条的左边。
+        private static bool LiquidCellsFit(Ctx c, Row row, float x)
+        {
+            int n = row.Cells.Count;
+            if (n < 2) return false;
+            for (int k = 1; k < n; k++) if (!TextRules.StartsWithNumber(PlainOf(row.Cells[k]).Trim())) return false;
+            return x + c.Measure(CellRich(row.Cells[0], true), RowSize(c)) + c.Gap <= ValueX(c) + BarW(c) + c.Gap;
+        }
+
+        /// 名称在标签列，数字各自靠右落在上面带条那张表的数字列里。返回底部。
+        private static float LiquidCells(Ctx c, Row row, NumCols nums, float x, float y)
+        {
+            float h = Mathf.Max(LineH(c), GridText(c, CellRich(row.Cells[0], true), RowSize(c), x, y));
+            List<List<Seg>> numbers = new List<List<Seg>>(row.Cells.Count - 1);
+            for (int k = 1; k < row.Cells.Count; k++)
+            {
+                List<Seg> one = new List<Seg>(row.Cells[k].Count);
+                for (int j = 0; j < row.Cells[k].Count; j++)
+                {
+                    Seg sg = row.Cells[k][j].With(row.Cells[k][j].Text);
+                    sg.Bold = false;
+                    one.Add(sg);
+                }
+                numbers.Add(one);
+            }
+            return NumRow(c, nums, numbers, ValueX(c) + BarW(c) + c.Gap, y, h);
+        }
+
+        /// 条后面的几格数字各自靠右落在共用的列里。h 是标签已经占的高度。返回底部。
+        private static float NumRow(Ctx c, NumCols nums, List<List<Seg>> cells, float x, float y, float h)
+        {
+            for (int k = 0; k < cells.Count; k++)
+            {
+                int col = TabLayout.Column(k, cells.Count, nums.W.Length);
+                float end = x;
+                for (int j = 0; j <= col; j++) end += nums.W[j] + (j > 0 ? nums.Gap : 0f);
+                TextMeshProUGUI t = Text(c, RowSize(c), ValueRich(cells[k]), Color.white, 0f);
+                Ui.Move(t.rectTransform, end - t.rectTransform.sizeDelta.x, y);
+                h = Mathf.Max(h, t.rectTransform.sizeDelta.y);
+            }
             return y + h + RowGap(c);
         }
 
@@ -463,6 +604,8 @@ namespace SectionedTooltips
             List<Seg> value = row.Value;
             BarMark bar = reading != null ? BarOf(reading.Segs) : SplitBar(ref value);
             if (bar != null && reading == null) value = Unparen(value);
+            NumCols nums = bar != null && reading == null ? NumColsOf(c, bl) : null;
+            if (nums != null && NumCells(value) != null) return BarW(c) + c.Gap + nums.Width;
             float w = (bar != null ? BarW(c) + c.Gap : 0f) + c.Measure(PairValue(value, reading), RowSize(c));
             if (note.Length > 0) w += 2f * c.Gap + c.Measure(Small(note, InkSoft), RowSize(c));
             return w;
@@ -686,11 +829,15 @@ namespace SectionedTooltips
         {
             internal readonly float Size;
             private readonly float[] start;
+            private readonly float[] columns;
+            private readonly bool[] right;
             private readonly float width;
 
-            internal TabLayout(float[] columns, float gap, float size)
+            internal TabLayout(float[] columns, bool[] right, float gap, float size)
             {
                 Size = size;
+                this.columns = columns;
+                this.right = right;
                 start = new float[columns.Length];
                 float x = 0f;
                 for (int k = 0; k < columns.Length; k++)
@@ -709,6 +856,14 @@ namespace SectionedTooltips
             }
 
             internal float CellStart(int cell, int cells) { return start[Column(cell, cells, start.Length)]; }
+
+            /// 这一格靠右对齐吗（整列都是数字）；靠右时文字的右边缘在 CellEnd。
+            internal bool Right(int cell, int cells) { return right[Column(cell, cells, start.Length)]; }
+            internal float CellEnd(int cell, int cells)
+            {
+                int k = Column(cell, cells, start.Length);
+                return start[k] + columns[k];
+            }
         }
 
         /// 两列之间的间距：全角空格在游戏的 tooltip 里本来就比半角格宽。
@@ -734,6 +889,9 @@ namespace SectionedTooltips
 
             float size = RowSize(c);
             float[] w = new float[count];
+            // 第一列以外，整列都以数字开头（“7.54L”“99.00%”）就靠右对齐，小数点和单位上下对得齐。
+            bool[] right = new bool[count];
+            for (int k = 1; k < count; k++) right[k] = true;
             for (int i = 0; i < bl.Rows.Count; i++)
             {
                 List<List<Seg>> cells = bl.Rows[i].Cells;
@@ -743,9 +901,10 @@ namespace SectionedTooltips
                     float cw = c.Measure(ValueInks(cells[k]), size);
                     int column = TabLayout.Column(k, cells.Count, count);
                     if (cw > w[column]) w[column] = cw;
+                    if (!TextRules.StartsWithNumber(PlainOf(cells[k]).Trim())) right[column] = false;
                 }
             }
-            TabLayout tab = new TabLayout(w, Mathf.Round(c.Gap * TabGapFactor), size);
+            TabLayout tab = new TabLayout(w, right, Mathf.Round(c.Gap * TabGapFactor), size);
             c.Tabs[bl] = tab;
             return tab;
         }
@@ -754,10 +913,11 @@ namespace SectionedTooltips
         /// 一行按制表位画成几列。格数与列数相同时逐列左对齐；格数少于列数时，第一格贴第 0 列、
         /// 末格贴最后一列——“按Ctrl展开杂质　2.98%”这种少一列的提示行，百分比因此仍落在百分比列。
         /// </summary>
-        private static float GridCells(Ctx c, Row row, TabLayout tab, float x, float y)
+        private static float GridCells(Ctx c, Row row, TabLayout tab, float x, float y, NumCols nums, bool liquid)
         {
             float h = LineH(c);
             int n = row.Cells.Count;
+            if (nums != null && LiquidCellsFit(c, row, x)) return LiquidCells(c, row, nums, x, y);
             if (tab.Width > c.W - c.Pad - x)
             {
                 // 卡片有宽度上限。按单元格重组文字，让旧式 <pos> 也能在卡片内自然折行。
@@ -772,9 +932,10 @@ namespace SectionedTooltips
             }
             for (int k = 0; k < n; k++)
             {
-                string rich = ValueInks(row.Cells[k]);
+                string rich = liquid ? CellRich(row.Cells[k], k == 0) : ValueInks(row.Cells[k]);
                 TextMeshProUGUI t = Text(c, tab.Size, rich, Color.white, 0f);
-                Ui.Move(t.rectTransform, x + tab.CellStart(k, n), y);
+                float at = tab.Right(k, n) ? tab.CellEnd(k, n) - t.rectTransform.sizeDelta.x : tab.CellStart(k, n);
+                Ui.Move(t.rectTransform, x + at, y);
                 h = Mathf.Max(h, t.rectTransform.sizeDelta.y);
             }
             return y + h + RowGap(c);

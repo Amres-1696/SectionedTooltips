@@ -691,7 +691,42 @@ namespace SectionedTooltips
                 if (row.IsPair && key != Sections.Value && Settings.IsTicket) SplitPercentList(cur, row);
             }
             MergeSplitSections(blocks);
+            if (Settings.IsTicket) LiquidTables(blocks);
             return blocks;
+        }
+
+        /// 液体一节里游戏写的成分行（“水　7536.374 ml  99.00%”）是一对，数值里用两个空格隔开体积和百分比。
+        /// 拆成“名称 | 体积 | 百分比”三格，和物品详情的成分表共用一套列，数字各自对齐。
+        private static void LiquidTables(List<Block> blocks)
+        {
+            for (int b = 0; b < blocks.Count; b++)
+            {
+                Block bl = blocks[b];
+                if (bl.Key != Sections.Liquid) continue;
+                for (int i = 0; i < bl.Rows.Count; i++)
+                {
+                    Row row = bl.Rows[i];
+                    if (!row.IsPair || row.Cells != null || row.Label.Count == 0) continue;
+                    bool bar = false;
+                    for (int k = 0; k < row.Value.Count; k++) if (row.Value[k].Bar != null) bar = true;
+                    if (bar) continue;
+                    List<List<Unit>> cells = TextUnits.SplitCells(TextUnits.Of(row.Value));
+                    if (cells == null) continue;
+                    bool numbers = true;
+                    for (int k = 0; k < cells.Count; k++) if (!TextRules.StartsWithNumber(TextUnits.Plain(cells[k]).Trim())) numbers = false;
+                    if (!numbers) continue;
+                    row.Cells = new List<List<Seg>>(cells.Count + 1);
+                    row.Cells.Add(row.Label);
+                    for (int k = 0; k < cells.Count; k++) row.Cells.Add(TextUnits.ToSegs(cells[k], row.Value));
+                    row.Segs = new List<Seg>(row.Label);
+                    Seg space = new Seg();
+                    space.Text = " ";
+                    row.Segs.Add(space);
+                    row.Segs.AddRange(row.Value);
+                    row.Label = null;
+                    row.Value = null;
+                }
+            }
         }
 
         /// 同一节被别的节隔开（酒瓶的“水”和“果酿”中间夹了附加信息）时并回第一段，
