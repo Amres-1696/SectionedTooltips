@@ -137,6 +137,9 @@ namespace SectionedTooltips
             int[] ordOf;
             string[] keyOf = AssignKeys(segs.Count, marks, out ordOf);
             List<Line> lines = SplitLines(segs, keyOf, ordOf);
+#if DEVDUMP
+            if (DumpAll.Running) DumpAll.Input(lines);
+#endif
             // Item Details 的区块：把它的行归到对应的小节，不再靠文本猜（没装它时为 null）。
             RekeySections(lines, ItemDetailsSections.Read(b));
             // AquaSense 的成分条画在原版文字上，估价单看不到：按它的接口换成我们画的条（没装它时什么都不做）。
@@ -163,7 +166,15 @@ namespace SectionedTooltips
 #if DEVDUMP
             if (DumpAll.Running)
             {
-                DumpAll.Take(f.Item, blocks);
+                // 经典风格把最终文字也记下来；估价单的卡片要 UI，靠 [slip] 日志看。
+                LayoutResult classic = null;
+                RichTextBuilder classicText = null;
+                if (!Settings.IsTicket)
+                {
+                    classic = new LayoutResult();
+                    classicText = Render(blocks, Settings.On(Settings.Icon) ? IconCellsFor(Overlay.IconOf(f.Item)) : 0, classic);
+                }
+                DumpAll.Take(f.Item, blocks, classicText, classic);
                 LastItem = f.Item;
                 return;
             }
@@ -175,6 +186,9 @@ namespace SectionedTooltips
             result.Liquid = liquid;
             result.Blocks = blocks;
             RichTextBuilder output = Render(blocks, iconCells, result);
+#if DEVDUMP
+            if (timer != null && !Settings.IsTicket) DumpAll.LogClassic(f.Item, output, result);
+#endif
 
             if (timer != null) frameLayoutMs = timer.Elapsed.TotalMilliseconds;
             if (timer != null && !ReferenceEquals(f.Item, loggedItem))
