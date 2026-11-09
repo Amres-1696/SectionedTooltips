@@ -1257,6 +1257,7 @@ namespace SectionedTooltips
         private static float Price(Ctx c, Parts p, float y, float clear)
         {
             float small = c.F * 0.75f;
+            Row perCell = PerCellRow(p);
             if (p.Price != null)
             {
                 // “售价”用小字放在数字前面、和注解一样贴着数字底部，不单独占一行。
@@ -1267,21 +1268,41 @@ namespace SectionedTooltips
                 Ui.Move(big.rectTransform, bx, y);
                 Vector2 bs = big.rectTransform.sizeDelta;
                 Ui.Move(label.rectTransform, c.Pad, y + bs.y - ls.y - c.U);
+                // 大字价格右边：进价，下面是性价比（常驻，不收起：它是估价单最要紧的数，收起再展开时下面的内容也不会跳）。两行一起贴着数字底部。
+                // 性价比不撑宽单子：右边放不下（印章也在这一行）就在价格下面单独一行。
                 string note = p.PriceNote;
+                float bottom = y + bs.y - c.U;
+                float room = c.W - c.Pad - (bx + bs.x + c.Gap);
+                if (p.Stamps.Count > 0) room -= 2f * c.Gap + StampSpan(c, p.Stamps[0]);
+                if (perCell != null && c.Measure(PerCellRich(perCell), small) <= room)
+                {
+                    TextMeshProUGUI pc = Text(c, small, PerCellRich(perCell), Color.white, 0f);
+                    bottom -= pc.rectTransform.sizeDelta.y;
+                    Ui.Move(pc.rectTransform, bx + bs.x + c.Gap, bottom);
+                    perCell = null;
+                }
                 if (note.Length > 0)
                 {
                     TextMeshProUGUI n = Text(c, small, note, Color.white, 0f);
-                    Ui.Move(n.rectTransform, bx + bs.x + c.Gap, y + bs.y - n.rectTransform.sizeDelta.y - c.U);
+                    Ui.Move(n.rectTransform, bx + bs.x + c.Gap, bottom - n.rectTransform.sizeDelta.y);
                 }
                 y += bs.y + c.Gap;
             }
             y = Mathf.Max(y, clear);
+            if (perCell != null)
+            {
+                // 价格右边放不下的性价比：单独一行，照样常驻。
+                List<string> own = new List<string>();
+                own.Add(PerCellRich(perCell));
+                y = PriceLine(c, own, y);
+            }
+            perCell = PerCellRow(p);
             // 大字价格下面的其他价格是明细：合成一行小字，“标价 100 · 性价比 11.1（100/9格）”。这一节里别的东西（比如“已上锁”这种标记）还是各占一行，按顺序。
             List<string> line = new List<string>();
             for (int i = 0; i < p.Prices.Count; i++)
             {
                 Row row = p.Prices[i];
-                if (!ShowPriceRow(p, row)) continue;
+                if (!ShowPriceRow(p, row) || ReferenceEquals(row, perCell)) continue;
                 if (row.IsPair && p.Price != null && BarOf(row.Value) == null)
                 {
                     if (foldPrices)
@@ -1296,6 +1317,23 @@ namespace SectionedTooltips
                 y = RowLine(c, row, y, c.Pad);
             }
             return PriceLine(c, line, y);
+        }
+
+        /// 价格明细里的“性价比 89.6（806/9格）”：画在进价下面。没有大字价格、或关了价格明细时为 null。
+        private static Row PerCellRow(Parts p)
+        {
+            if (p.Price == null) return null;
+            for (int i = 0; i < p.Prices.Count; i++)
+            {
+                Row row = p.Prices[i];
+                if (ShowPriceRow(p, row) && row.IsPair && BarOf(row.Value) == null && TextRules.PerCellValue(PlainOf(row.Value))) return row;
+            }
+            return null;
+        }
+
+        private static string PerCellRich(Row row)
+        {
+            return InkRich(row.Label, InkSoft, false) + " " + InkRich(row.Value, Ink, false);
         }
 
         /// 把攒起来的价格明细写出去并清空。返回底部位置。

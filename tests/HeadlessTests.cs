@@ -41,6 +41,11 @@ internal static class HeadlessTests
 
     private static void Widths()
     {
+        Check(TextRules.PerCellValue("89.6（806/9格）"), "性价比：数后面括号里一个比值");
+        Check(TextRules.PerCellValue("1051.6 (16826/16格)"), "性价比：半角括号");
+        Check(!TextRules.PerCellValue("26807"), "单个数不是性价比");
+        Check(!TextRules.PerCellValue("优质水 (+50%)"), "括号里没有比值不是性价比");
+        Check(TextRules.StartsWithNumber("+0.61%") && TextRules.StartsWithNumber("<0.01%") && !TextRules.StartsWithNumber("按Ctrl"), "以数字开头");
         Check(TextUnits.CharWidth('A') == TextUnits.Cell, "ASCII 算一格");
         Check(TextUnits.CharWidth('中') == 2 * TextUnits.Cell, "汉字算两格");
         Check(TextUnits.CharWidth('　') == 2 * TextUnits.Cell, "全角空格算两格");

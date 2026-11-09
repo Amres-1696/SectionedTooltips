@@ -12,6 +12,31 @@ namespace SectionedTooltips
     {
         // ---------------------------------------------------------------- 分数
 
+        /// “7.54L”“99.00%”“-3”“<0.01%”：以数字开头（前面可以有正负号、小于号）。
+        internal static bool StartsWithNumber(string s)
+        {
+            int i = 0;
+            while (i < s.Length && (s[i] == '+' || s[i] == '-' || s[i] == '−' || s[i] == '<' || s[i] == '>' || s[i] == '~')) i++;
+            if (i < s.Length && s[i] == '.') i++;
+            return i < s.Length && char.IsDigit(s[i]);
+        }
+
+        /// “89.6（806/9格）”“1051.6 (16826/16格)”：一个数后面括号里是一个比值，即“每格多少钱”这种数值。
+        internal static bool PerCellValue(string s)
+        {
+            s = s.Trim();
+            int open = s.IndexOfAny(new char[] { '（', '(' });
+            if (open <= 0 || s.Length < open + 4) return false;
+            char last = s[s.Length - 1];
+            if (last != '）' && last != ')') return false;
+            string head = s.Substring(0, open).Trim();
+            if (head.Length == 0 || !StartsWithNumber(head)) return false;
+            for (int i = 0; i < head.Length; i++) if (!char.IsDigit(head[i]) && ".,+-".IndexOf(head[i]) < 0) return false;
+            string inner = s.Substring(open + 1, s.Length - open - 2);
+            int slash = inner.IndexOf('/');
+            return slash > 0 && slash < inner.Length - 1 && char.IsDigit(inner[slash - 1]) && char.IsDigit(inner[slash + 1]);
+        }
+
         /// <summary>“a/b”，两个数字后面可以带单位；别的都不算。</summary>
         internal static bool ParseFraction(string s, out float a, out float b)
         {
