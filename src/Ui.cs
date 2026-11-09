@@ -81,8 +81,23 @@ namespace SectionedTooltips
             // 折行的文字：按真实宽度排一次再读回行数。GetPreferredValues 对折行的中文富文本会少数行，导致下一行压到上一行上。ignoreActiveState：TMP 对未激活的对象跳过排版，而估价单常在两次悬停之间隐藏着构建。
             t.rectTransform.sizeDelta = new Vector2(wrap, 10000f);
             t.ForceMeshUpdate(true, true);
-            float h = t.preferredHeight;
             TMP_TextInfo ti = t.textInfo;
+            // 末行只剩一两个字（“架。”“/天”）时把宽度收两个字，让上一行匀几个字下来；收了反而多出一行或还是孤字就不收。
+            if (ti != null && ti.lineCount >= 2 && ti.lineInfo[ti.lineCount - 1].visibleCharacterCount <= 2 && wrap - 2f * size > wrap * 0.6f)
+            {
+                int lines = ti.lineCount;
+                t.rectTransform.sizeDelta = new Vector2(wrap - 2f * size, 10000f);
+                t.ForceMeshUpdate(true, true);
+                ti = t.textInfo;
+                if (ti.lineCount == lines && ti.lineInfo[ti.lineCount - 1].visibleCharacterCount > 2) wrap -= 2f * size;
+                else
+                {
+                    t.rectTransform.sizeDelta = new Vector2(wrap, 10000f);
+                    t.ForceMeshUpdate(true, true);
+                    ti = t.textInfo;
+                }
+            }
+            float h = t.preferredHeight;
             if (ti != null && ti.lineCount > 0) h = Mathf.Max(h, ti.lineInfo[0].ascender - ti.lineInfo[ti.lineCount - 1].descender);
             t.rectTransform.sizeDelta = new Vector2(wrap, Mathf.Ceil(h));
             return t;

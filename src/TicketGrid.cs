@@ -242,7 +242,7 @@ namespace SectionedTooltips
         private static float Section(Ctx c, Block bl, float y)
         {
             bl = StatusFirst(bl);
-            y = SectionHeader(c, Sections.TitleOf(bl.Key), InkOf(Sections.StyleOf(bl.Key).Accent, Ink), y);
+            y = SectionHeader(c, Sections.TitleOf(bl.Key), y);
             float left = LabelX(c);
             bool module = bl.Key == Sections.Module, stats = false, affixes = false;
             bool labelled = Labelled(bl), strip = StripsBrackets(c, bl);
@@ -351,7 +351,8 @@ namespace SectionedTooltips
                 // 免得“（另 3 项低于显示阈值）”这种说明缩到数值列去。
                 // 小标题（“模组效果：”）管着的那几行例外：标签占着标签列，行也从标签列起就会叠在一起，
                 // 整组都从数值列起。
-                float rowX = labelled && (BarOf(row.Segs) != null || headed) ? ValueX(c) : left;
+                // 进度条总是从数值列起（这一节只有一条没标签的条时也是，比如空量筒的“▬ 0 ml / 100 ml”），和别的节的条对齐；宽度也是按数值列算的。
+                float rowX = BarOf(row.Segs) != null || (labelled && headed) ? ValueX(c) : left;
                 y = GridRow(c, row, pending ?? "", rowX, y);
                 if (pending != null) pending = "";
             }
@@ -631,13 +632,30 @@ namespace SectionedTooltips
             float h = Mathf.Max(lh, GridLabel(c, label, y));
             List<Seg> segs = row.Segs;
             BarMark bar = SplitBar(ref segs);
+            string rich = ValueInks(segs);
             if (bar != null)
             {
                 Meter(c, bar.Ratio, BarInk(bar), x, y, BarW(c), lh);
                 x += BarW(c) + c.Gap;
             }
-            h = Mathf.Max(h, GridText(c, ValueInks(segs), RowSize(c), x, y));
+            else rich = Remark(segs);
+            h = Mathf.Max(h, GridText(c, rich, RowSize(c), x, y));
             return y + h + RowGap(c);
+        }
+
+        /// 没有标签的整行说明（“1 瓶陈化中，每天陈化 1 天”）：不加粗，默认颜色的字用比数值淡一档的墨，有自己颜色的照旧。
+        private static string Remark(List<Seg> segs)
+        {
+            Color mid = Color.Lerp(Ink, InkSoft, 0.5f);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < segs.Count; i++)
+            {
+                Seg s = segs[i];
+                if (Drawn(s) || string.IsNullOrEmpty(s.Text)) continue;
+                Color ink = ValueInk(s.Color);
+                sb.Append(Tint(s.Text, ink == Ink ? mid : ink));
+            }
+            return sb.ToString().Trim();
         }
 
         private static float GridRowWidth(Ctx c, Row row)
@@ -1361,7 +1379,7 @@ namespace SectionedTooltips
         private static float Contents(Ctx c, ContentsInfo contents, float y)
         {
             string title = SectionedTooltipsMod.L("panel_contents") + " " + contents.Total;
-            y = SectionHeader(c, title, InkOf(Sections.StyleOf(Sections.Container).Accent, Ink), y);
+            y = SectionHeader(c, title, y);
             bool grid = GridContents(contents);
             float body = grid ? ValueX(c) : LabelX(c);
             float cell = Mathf.Round(c.M.Line * 1.5f);

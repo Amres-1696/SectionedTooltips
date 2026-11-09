@@ -1530,13 +1530,14 @@ namespace SectionedTooltips
         }
 
         /// 小节标题用它自己的墨色，下面一条细线横过单子。（以前标题后面垫一块实色，比下面的内容还抢眼。）
-        private static float SectionHeader(Ctx c, string title, Color ink, float y)
+        /// 分节标题：全都用正文的墨色，下面一道纸边色的细线。颜色只留给数据本身（盈亏、成分、市场事件）和印章。
+        private static float SectionHeader(Ctx c, string title, float y)
         {
             y += c.Gap * 1.5f;
-            TextMeshProUGUI t = Text(c, c.F * 0.8f, "<b>" + title + "</b>", ink, 0f);
+            TextMeshProUGUI t = Text(c, c.F * 0.8f, "<b>" + title + "</b>", Ink, 0f);
             float th = t.rectTransform.sizeDelta.y;
             Ui.Move(t.rectTransform, c.Pad, y);
-            Solid(c, ink, c.Pad, y + th + c.U, c.Inner, c.U);
+            Solid(c, PaperEdge, c.Pad, y + th + c.U, c.Inner, c.U);
             return y + th + 2f * c.U + c.Gap * 0.75f;
         }
 
@@ -1794,8 +1795,10 @@ namespace SectionedTooltips
         private static float Footer(Ctx c, GameItemElement item, float y)
         {
             y += c.Gap * 1.5f;
-            float h = Mathf.Round(c.M.Line * 0.8f);
+            float h = Mathf.Round(c.M.Line * 0.55f);
             TextMeshProUGUI no = Text(c, c.F * 0.65f, TicketNo(item), InkSoft, 0f);
+            // 条形码是装饰，不该是整张单子最黑的一块。
+            Color bars = Color.Lerp(Paper, Ink, 0.7f);
             Vector2 s = no.rectTransform.sizeDelta;
             float x = c.Pad, end = c.Pad + Mathf.Min(c.Inner * 0.55f, 48f * c.U, c.Inner - s.x - 2f * c.Gap);
             int seed = 0;
@@ -1804,7 +1807,7 @@ namespace SectionedTooltips
             while (x < end)
             {
                 float w = rng.Next(1, 3) * c.U;
-                Solid(c, Ink, x, y, w, h);
+                Solid(c, bars, x, y, w, h);
                 x += w + rng.Next(1, 3) * c.U;
             }
             Ui.Move(no.rectTransform, c.W - c.Pad - s.x, y + h - s.y);
@@ -2296,6 +2299,8 @@ namespace SectionedTooltips
                     if (t.Length == 0) continue;
                     s = s.With(t);
                 }
+                // “进价 350-140”会读成“350 到 140”：盈亏前面空一格，“350 -140”。
+                else if (s.Text.Length > 1 && (s.Text[0] == '+' || s.Text[0] == '-') && char.IsDigit(s.Text[1])) s = s.With(" " + s.Text);
                 rest.Add(s);
             }
             string rich = InkRich(rest, InkSoft);
