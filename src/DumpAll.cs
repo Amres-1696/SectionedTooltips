@@ -102,11 +102,39 @@ namespace SectionedTooltips
                         }
                     }
                 }
+
+                // 新建的物品都是初始状态；改良种子、写好特性的 DNA 盘这类状态另外造出来，id 记作“样本:…”。
+                List<States.Sample> samples = null;
+                States.Building = true;
+                try
+                {
+                    samples = States.Make();
+                    for (int i = 0; i < samples.Count; i++)
+                    {
+                        try
+                        {
+                            input.Clear();
+                            currentId = "样本:" + samples[i].Label;
+                            States.Invoke(get, samples[i]);
+                            count++;
+                        }
+                        catch (Exception e)
+                        {
+                            Failed.Add(currentId + "：" + e.GetType().Name + " " + e.Message);
+                        }
+                    }
+                }
+                finally
+                {
+                    States.Building = false;
+                    States.Destroy(samples);
+                }
             }
             finally
             {
                 Running = false;
             }
+            ExportTemplates();
 
             try
             {
@@ -123,6 +151,129 @@ namespace SectionedTooltips
             {
                 SectionedTooltipsMod.Log("全量导出写文件失败：" + e.Message);
             }
+        }
+
+        private static bool templatesDone;
+
+        /// 游戏 tooltip 用的文本模板（Mechanic 表，LocHelper.GetLocalizedMechanic 读的那张），每种语言一个文件：
+        /// templates-zh.txt 等，每行“key\t模板”，按 key 排好。认行、做多语言时拿它对照，不用猜文字。
+        private static void ExportTemplates()
+        {
+            if (templatesDone) return;
+            templatesDone = true;
+            try
+            {
+                UnityEngine.Localization.Settings.LocalizedStringDatabase db = UnityEngine.Localization.Settings.LocalizationSettings.StringDatabase;
+                List<UnityEngine.Localization.Locale> locales = UnityEngine.Localization.Settings.LocalizationSettings.AvailableLocales.Locales;
+                for (int i = 0; i < locales.Count; i++)
+                {
+                    UnityEngine.Localization.Locale locale = locales[i];
+                    UnityEngine.Localization.Tables.StringTable table = db.GetTable("Mechanic", locale);
+                    if (table == null) continue;
+                    List<string> rows = new List<string>();
+                    List<KeyValuePair<string, string>> raw = new List<KeyValuePair<string, string>>();
+                    foreach (UnityEngine.Localization.Tables.StringTableEntry e in table.Values)
+                    {
+                        if (e == null || string.IsNullOrEmpty(e.Key)) continue;
+                        rows.Add(e.Key + "\t" + Flat(e.LocalizedValue));
+                        raw.Add(new KeyValuePair<string, string>(e.Key, e.LocalizedValue ?? ""));
+                    }
+                    rows.Sort(StringComparer.Ordinal);
+                    string code = locale.Identifier.Code;
+                    ModHelper.WriteModDataFileText(ModId, "templates-" + code + ".txt", string.Join("\n", rows.ToArray()) + "\n");
+                    SectionedTooltipsMod.Log(string.Format("文本模板：{0} {1} 条", code, rows.Count));
+                    if (raw.Count > 0) CheckTemplates(code, raw);
+                }
+            }
+            catch (Exception e)
+            {
+                SectionedTooltipsMod.Log("导出文本模板失败：" + e);
+            }
+        }
+
+        /// 每个模板的占位符换成几种典型的值。“Abc3”是带等级的名字（写入种子的特性就是这样被拆错的）。
+        private static readonly string[][] Fills =
+        {
+            new string[] { "词", "Abc" },
+            new string[] { "数", "12" },
+            new string[] { "等级", "Abc3" },
+            new string[] { "百分比", "+25%" },
+        };
+
+        /// 把每个模板填好值、当成附加信息里的一行送进 Layout.Group，记下拆成了什么：
+        /// templates-check-语言.txt，每行“key\t填法\t结果”。结果里 P[标签|值] 是一对，T[…] 整行文字，H[…] 小标题，C3[…] 三列，W 表示整行宽。
+        /// tool\view.js --templates 拿各语言、各填法互相比，找出依赖写法或填进去的值的规则。
+        private static void CheckTemplates(string code, List<KeyValuePair<string, string>> raw)
+        {
+            try
+            {
+                TextUnits.Configure();
+                LocTemplates.Check();
+                StringBuilder sb = new StringBuilder(1 << 18);
+                raw.Sort(delegate(KeyValuePair<string, string> a, KeyValuePair<string, string> b) { return string.CompareOrdinal(a.Key, b.Key); });
+                for (int i = 0; i < raw.Count; i++)
+                {
+                    for (int f = 0; f < Fills.Length; f++)
+                    {
+                        string text = Fill(raw[i].Value, Fills[f][1]);
+                        sb.Append(raw[i].Key).Append('\t').Append(Fills[f][0]).Append('\t');
+                        try
+                        {
+                            List<Line> lines = new List<Line>();
+                            string[] parts = text.Split('\n');
+                            for (int k = 0; k < parts.Length; k++)
+                            {
+                                string plain = TextUnits.Plain(parts[k]).Trim();
+                                if (plain.Length == 0) continue;
+                                Line l = new Line();
+                                Seg s = new Seg();
+                                s.Text = parts[k];
+                                l.Segs.Add(s);
+                                l.Key = Sections.Info;
+                                l.Plain = plain;
+                                lines.Add(l);
+                            }
+                            List<Block> blocks = Layout.Group(lines);
+                            for (int b = 0; b < blocks.Count; b++)
+                                for (int r = 0; r < blocks[b].Rows.Count; r++) sb.Append(Shape(blocks[b].Rows[r])).Append(' ');
+                        }
+                        catch (Exception e)
+                        {
+                            sb.Append("ERR[").Append(Flat(e.Message)).Append(']');
+                        }
+                        sb.Append('\n');
+                    }
+                }
+                ModHelper.WriteModDataFileText(ModId, "templates-check-" + code + ".txt", sb.ToString());
+            }
+            catch (Exception e)
+            {
+                SectionedTooltipsMod.Log("检查文本模板失败：" + code + "：" + e);
+            }
+        }
+
+        /// 占位符（{0}、{1:…}）都换成同一个值；花括号里再套花括号的也整个换掉。
+        private static string Fill(string template, string value)
+        {
+            StringBuilder sb = new StringBuilder(template.Length + 16);
+            int depth = 0;
+            for (int i = 0; i < template.Length; i++)
+            {
+                char ch = template[i];
+                if (ch == '{') { if (depth == 0) sb.Append(value); depth++; continue; }
+                if (ch == '}' && depth > 0) { depth--; continue; }
+                if (depth == 0) sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        private static string Shape(Row row)
+        {
+            if (row.Heading) return "H[" + Flat(Ticket.PlainOf(row.Label)).Trim() + "]";
+            if (row.IsPair)
+                return (row.Wide ? "W" : "") + "P[" + Flat(Ticket.PlainOf(row.Label)).Trim() + "|" + Flat(Ticket.PlainOf(row.Value)).Trim() + "]";
+            if (row.Cells != null && row.Cells.Count > 1) return "C" + row.Cells.Count + "[" + Flat(Ticket.PlainOf(row.Segs)).Trim() + "]";
+            return "T[" + Flat(Ticket.PlainOf(row.Segs)).Trim() + "]";
         }
 
         /// 文件头：影响排版的设置，以及哪些模组改了 tooltip。对比时先看这几行一样不一样。

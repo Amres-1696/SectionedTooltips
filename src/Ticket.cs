@@ -138,6 +138,7 @@ namespace SectionedTooltips
             // 构建前先激活：TextMeshPro 只给激活状态的文字排版和测量。
             root.gameObject.SetActive(true);
 #if DEVDUMP
+            Stress.PrepareSamples(item);
             if (Stress.Pending(item))
             {
                 float sy0 = Mathf.Abs(root.localScale.y), sx0 = Mathf.Abs(root.localScale.x);
