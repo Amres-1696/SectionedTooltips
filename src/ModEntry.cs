@@ -100,6 +100,12 @@ namespace SectionedTooltips
         internal static ConfigEntry<bool> ShowModInfo;
         internal static ConfigEntry<bool> ShowFooter;
         internal static ConfigEntry<bool> TagBackground;
+        internal static ConfigEntry<bool> Collapse;
+        internal static ConfigEntry<string> ExpandKey;
+        internal static ConfigEntry<bool> CollapsePrices;
+        internal static ConfigEntry<bool> CollapseContents;
+        internal static ConfigEntry<bool> CollapseDescription;
+        internal static ConfigEntry<bool> CollapseModInfo;
         /// 每个 Ticket.TagGroups 条目一个颜色设置。
         internal static ConfigEntry<string>[] TagColors;
         internal static ConfigEntry<bool> Debug;
@@ -142,31 +148,41 @@ namespace SectionedTooltips
         {
             // Init 早于加载器读取本模组的 Localization csv，所以节名在这里没法本地化；标签和提示是回调，可以。
             const string general = "General / 常规";
-            const string content = "Content / 显示内容";
             const string slip = SlipSection;
+            const string content = "Content / 显示内容";
+            const string fold = "Collapse / 收起与展开";
             const string tags = "Tags / 分类标签";
             const string classic = "Classic style / 经典风格";
             const string debug = "Diagnostics / 诊断";
 
+            // 按设置窗口里的顺序定义：常规、估价单外观、显示内容、收起与展开、分类标签、经典风格、诊断。
+            // 存档只按键名存，挪分组不影响已经保存的值。
             Enabled = cfg.Define("Enabled", true, general, Text("cfg_enabled"), Text("cfg_enabled_tip"), false);
             Style = cfg.DefineEnum("Style", TooltipStyle.Ticket, general, Text("cfg_style"), Text("cfg_style_tip"), false);
-            // 两种风格都有。
-            ShowDescription = cfg.Define("ShowDescription", true, content, Text("cfg_show_desc"), Text("cfg_show_desc_tip"), false);
-            ShowModInfo = cfg.Define("ShowModInfo", true, content, Text("cfg_show_mods"), Text("cfg_show_mods_tip"), false);
+            // 估价单本身的大小和样子。
+            Scale = Number(cfg, "TicketScale", 100, slip, "cfg_scale", 50, 150);
+            PriceSize = Number(cfg, "PriceSize", 220, slip, "cfg_price_size", 100, 220);
+            Opacity = Number(cfg, "TicketOpacity", 100, slip, "cfg_opacity", 40, 100);
+            Paper = cfg.Define("PaperColor", Ticket.PaperNames[0], slip, Text("cfg_paper"), Ticket.PaperNames, Text("cfg_paper_tip"), false);
+            NotOwnedPaper = cfg.Define("NotOwnedPaperColor", Ticket.PaperNames[1], slip, Text("cfg_paper_not_owned"), Ticket.PaperNames, Text("cfg_paper_not_owned_tip"), false);
+            ModsColumn = Number(cfg, "ModsColumnLines", 8, slip, "cfg_mods_column", 0, 30);
+            // 显示哪些内容（关掉的两种风格都不显示，按展开键也不出来）。
             Icon = cfg.Define("ItemIcon", true, content, Text("cfg_icon"), Text("cfg_icon_tip"), false);
             Bars = cfg.Define("GraphicBars", true, content, Text("cfg_bars"), Text("cfg_bars_tip"), false);
             FractionBars = cfg.Define("FractionBars", true, content, Text("cfg_fraction_bars"), Text("cfg_fraction_bars_tip"), false);
             ContentsPanel = cfg.Define("ContentsPanel", true, content, Text("cfg_contents_panel"), Text("cfg_contents_panel_tip"), false);
             ContentRows = Number(cfg, "ContentRows", 2, content, "cfg_content_rows", 1, 6);
-            // 只对估价单。大小和显示内容给估价单挡住其他窗口的玩家调。
-            Scale = Number(cfg, "TicketScale", 100, slip, "cfg_scale", 50, 150);
-            PriceSize = Number(cfg, "PriceSize", 220, slip, "cfg_price_size", 100, 220);
-            ModsColumn = Number(cfg, "ModsColumnLines", 8, slip, "cfg_mods_column", 0, 30);
-            Opacity = Number(cfg, "TicketOpacity", 100, slip, "cfg_opacity", 40, 100);
-            Paper = cfg.Define("PaperColor", Ticket.PaperNames[0], slip, Text("cfg_paper"), Ticket.PaperNames, Text("cfg_paper_tip"), false);
-            NotOwnedPaper = cfg.Define("NotOwnedPaperColor", Ticket.PaperNames[1], slip, Text("cfg_paper_not_owned"), Ticket.PaperNames, Text("cfg_paper_not_owned_tip"), false);
-            ShowPriceDetails = cfg.Define("ShowPriceDetails", true, slip, Text("cfg_show_prices"), Text("cfg_show_prices_tip"), false);
-            ShowFooter = cfg.Define("ShowFooter", true, slip, Text("cfg_show_footer"), Text("cfg_show_footer_tip"), false);
+            ShowPriceDetails = cfg.Define("ShowPriceDetails", true, content, Text("cfg_show_prices"), Text("cfg_show_prices_tip"), false);
+            ShowDescription = cfg.Define("ShowDescription", true, content, Text("cfg_show_desc"), Text("cfg_show_desc_tip"), false);
+            ShowModInfo = cfg.Define("ShowModInfo", true, content, Text("cfg_show_mods"), Text("cfg_show_mods_tip"), false);
+            ShowFooter = cfg.Define("ShowFooter", true, content, Text("cfg_show_footer"), Text("cfg_show_footer_tip"), false);
+            // 估价单平时收起哪些部分，按住哪个键展开。
+            Collapse = cfg.Define("Collapse", true, fold, Text("cfg_collapse"), Text("cfg_collapse_tip"), false);
+            ExpandKey = cfg.Define("ExpandKey", Expand.KeyNames[0], fold, Text("cfg_expand_key"), Expand.KeyNames, Text("cfg_expand_key_tip"), false);
+            CollapsePrices = cfg.Define("CollapsePrices", true, fold, Text("cfg_collapse_prices"), Text("cfg_collapse_prices_tip"), false);
+            CollapseContents = cfg.Define("CollapseContents", true, fold, Text("cfg_collapse_contents"), Text("cfg_collapse_contents_tip"), false);
+            CollapseDescription = cfg.Define("CollapseDescription", true, fold, Text("cfg_collapse_desc"), Text("cfg_collapse_desc_tip"), false);
+            CollapseModInfo = cfg.Define("CollapseModInfo", false, fold, Text("cfg_collapse_mods"), Text("cfg_collapse_mods_tip"), false);
             // 估价单的分类标签：底色的开关，以及每组一个颜色。
             TagBackground = cfg.Define("TagBackground", true, tags, Text("cfg_tag_bg"), Text("cfg_tag_bg_tip"), false);
             TagColors = new ConfigEntry<string>[Ticket.TagGroups.Length];
@@ -201,6 +217,12 @@ namespace SectionedTooltips
             ShowModInfo.OnChanged += delegate { Version++; };
             ShowFooter.OnChanged += delegate { Version++; };
             TagBackground.OnChanged += delegate { Version++; };
+            Collapse.OnChanged += delegate { Version++; };
+            ExpandKey.OnChanged += delegate { Version++; };
+            CollapsePrices.OnChanged += delegate { Version++; };
+            CollapseContents.OnChanged += delegate { Version++; };
+            CollapseDescription.OnChanged += delegate { Version++; };
+            CollapseModInfo.OnChanged += delegate { Version++; };
             for (int i = 0; i < TagColors.Length; i++) TagColors[i].OnChanged += delegate { Version++; };
 
             Enabled.OnChanged += delegate { Version++; };

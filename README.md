@@ -56,6 +56,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/ItemDetailsSections.cs` | 读 Item Details 的区块协议，把它的行归到对应小节 |
 | `src/AquaSense.cs` | 读《更好的水商操作体验》的成分接口，把它的成分行画成进度条 |
 | `src/ReadableFonts.cs` | 和《字体大小优化》的兼容：它开着时估价单自己放大，字号抬到它不改的范围 |
+| `src/Expand.cs` | 平时收起、按住展开键看完整估价单 |
 | `src/DumpAll.cs` | dev 构建：导出全部物品的分节结果（`dumpall.flag`） |
 | `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`） |
 | `src/TextRules.cs` | 纯文本规则（分数、模板、括号、清单），不引用游戏程序集 |

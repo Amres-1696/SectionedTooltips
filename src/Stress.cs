@@ -438,6 +438,8 @@ namespace SectionedTooltips
             RectTransform keepCard = card;
             Vector2 keepSize = cardSize;
             float keepRoom = slipRoom;
+            // 压力测试的单子都按完整的建，收起与否不影响分栏和宽度的检查。
+            buildFull = true;
             Stress.Run(room, delegate(LayoutResult r, float caseRoom)
             {
                 slipRoom = caseRoom;

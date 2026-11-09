@@ -103,3 +103,21 @@ gene_header,Genes
 gene_expressed,Expressed
 gene_a,A
 gene_b,B
+cfg_collapse,Collapse some parts
+cfg_collapse_tip,"The slip shows just the essentials; the parts ticked below stay folded until you hold the expand key, which shows the full slip. A line at the bottom says what is folded."
+cfg_expand_key,Expand key
+cfg_expand_key_tip,Hold this key to show the full slip; let go to fold it again.
+cfg_collapse_prices,Fold price details
+cfg_collapse_prices_tip,"The price details under the selling price (list price and so on). The big selling price, the purchase price and value per cell stay."
+cfg_collapse_contents,Fold contents
+cfg_collapse_contents_tip,"The item grids of containers and machines. Battery and tank gauges are readings and stay."
+cfg_collapse_desc,Fold item description
+cfg_collapse_desc_tip,The item's own flavour text.
+cfg_collapse_mods,Fold mod info
+cfg_collapse_mods_tip,"The Mod info section added by other mods, and the mod source line."
+fold_view,Show {0}
+fold_sep,","
+fold_prices,price details
+fold_contents,contents
+fold_desc,description
+fold_mods,mod info

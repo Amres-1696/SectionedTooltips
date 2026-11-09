@@ -67,6 +67,8 @@ namespace SectionedTooltips
         private static PixelWindow boxWindow;
         private static LayoutResult builtFor;
         private static GameItemElement builtItem;
+        /// 当前这张是完整的还是收起的；buildFull 是下一张要建成哪种。
+        private static bool builtFull, buildFull;
         private static Vector2 cardSize;
         /// 屏幕高度，用卡片单位表示：比这更高的估价单也会把附加信息和其他节挪到独立一栏。
         private static float slipRoom = float.MaxValue;
@@ -81,6 +83,8 @@ namespace SectionedTooltips
             public int Version;
             public RectTransform Card;
             public Vector2 Size;
+            /// 完整的单子（展开键按着，或者没开收起）。
+            public bool Full;
         }
 
         private const int KeptSlips = 8;
@@ -142,11 +146,13 @@ namespace SectionedTooltips
                 RunStress(tmp, item, sy0 > 0f ? screen0.height / sy0 : float.MaxValue);
             }
 #endif
-            bool current = !fresh && card != null && ReferenceEquals(builtFor, r) && ReferenceEquals(builtItem, item);
-            if (!current && (Reuse(r, item) || BuildNow(item, hidden)))
+            bool full = Expand.Full;
+            bool current = !fresh && card != null && ReferenceEquals(builtFor, r) && ReferenceEquals(builtItem, item) && builtFull == full;
+            if (!current && (Reuse(r, item, full) || BuildNow(item, hidden)))
             {
-                if (!ReferenceEquals(builtFor, r) || !ReferenceEquals(builtItem, item))
+                if (!ReferenceEquals(builtFor, r) || !ReferenceEquals(builtItem, item) || builtFull != full)
                 {
+                    buildFull = full;
                     float sy = Mathf.Abs(root.localScale.y), sx = Mathf.Abs(root.localScale.x);
                     Rect screen = Panels.ScreenRect(parent, win);
                     slipRoom = sy > 0f ? screen.height / sy : float.MaxValue;
@@ -454,12 +460,12 @@ namespace SectionedTooltips
         }
 
         /// 如果这个排版和物品有存好的估价单，就显示它。
-        private static bool Reuse(LayoutResult r, GameItemElement item)
+        private static bool Reuse(LayoutResult r, GameItemElement item, bool full)
         {
             for (int i = 0; i < slips.Count; i++)
             {
                 Built s = slips[i];
-                if (!ReferenceEquals(s.For, r) || !ReferenceEquals(s.Item, item) || s.Version != Settings.Version || s.Card == null) continue;
+                if (!ReferenceEquals(s.For, r) || !ReferenceEquals(s.Item, item) || s.Version != Settings.Version || s.Card == null || s.Full != full) continue;
                 slips.RemoveAt(i);
                 slips.Insert(0, s);
                 if (card != null && card != s.Card) card.gameObject.SetActive(false);
@@ -467,6 +473,7 @@ namespace SectionedTooltips
                 cardSize = s.Size;
                 builtFor = s.For;
                 builtItem = s.Item;
+                builtFull = s.Full;
                 card.gameObject.SetActive(true);
                 return true;
             }
@@ -521,6 +528,15 @@ namespace SectionedTooltips
         }
 
         private static bool fineParts, wantFine;
+        /// 这一张平时收起的部分（见 Expand），以及实际收起了哪些（写进底部的提示）。
+        private static bool foldPrices, foldContents, foldDesc, foldMods;
+        private static readonly List<string> folded = new List<string>();
+
+        private static void Folded(string key)
+        {
+            string name = SectionedTooltipsMod.L(key);
+            if (!folded.Contains(name)) folded.Add(name);
+        }
         /// 上一张单子因为比窗口宽缩到的比例（不含字号抬高的那部分），调试导出用。
         private static float builtFit = 1f;
 
@@ -530,6 +546,12 @@ namespace SectionedTooltips
             if (card != null) card.gameObject.SetActive(false);
             builtFor = r;
             builtItem = item;
+            builtFull = buildFull;
+            foldPrices = !buildFull && Expand.Folds(Settings.CollapsePrices);
+            foldContents = !buildFull && Expand.Folds(Settings.CollapseContents);
+            foldDesc = !buildFull && Expand.Folds(Settings.CollapseDescription);
+            foldMods = !buildFull && Expand.Folds(Settings.CollapseModInfo);
+            folded.Clear();
             lastBuildFrame = Time.frameCount;
             waitingItem = null;
             StartProbe();
@@ -602,6 +624,11 @@ namespace SectionedTooltips
             {
                 Block bl = r.Blocks[i];
                 if (!OnSlip(bl.Key)) continue;
+                if (foldMods && bl.Key == Sections.Mods)
+                {
+                    Folded("fold_mods");
+                    continue;
+                }
                 if (Aside(bl.Key))
                 {
                     if (asideDone) continue;
@@ -610,6 +637,7 @@ namespace SectionedTooltips
                     {
                         Block side = r.Blocks[j];
                         if (!OnSlip(side.Key) || !Aside(side.Key)) continue;
+                        if (foldMods && side.Key == Sections.Mods) { Folded("fold_mods"); continue; }
                         sideRows += side.Rows.Count;
                         Begin(c, pieces, y, true);
                         y = Section(c, side, y);
@@ -622,16 +650,25 @@ namespace SectionedTooltips
                 End(c, y);
             }
             Step("sections");
-            if (r.Contents != null && r.Contents.Entries.Count > 0)
+            ContentsInfo inside = r.Contents != null && r.Contents.Entries.Count > 0 ? r.Contents : null;
+            if (inside != null && foldContents)
+            {
+                // 收起的是物品格子；电池、水箱这类量条是读数，留着。
+                Folded("fold_contents");
+                inside = GaugesOnly(inside);
+            }
+            if (inside != null)
             {
                 Begin(c, pieces, y, false);
-                y = Contents(c, r.Contents, y);
+                y = Contents(c, inside, y);
                 End(c, y);
             }
             Step("contents");
             Begin(c, pieces, y, false);
-            y = Description(c, p, item, y);
-            y = ModSource(c, item, y);
+            if (foldDesc && p.Desc.Count > 0) Folded("fold_desc");
+            else y = Description(c, p, item, y);
+            if (!foldMods) y = ModSource(c, item, y);
+            if (folded.Count > 0) y = FoldHint(c, y);
             End(c, y);
             Step("description");
             // 页脚也单独一块，分栏后仍留在第一栏底部。
@@ -827,7 +864,8 @@ namespace SectionedTooltips
             {
                 Built s = slips[i];
                 if (s.Card == card) slips.RemoveAt(i);
-                else if (s.Card == null || s.Version != Settings.Version || slips.Count >= KeptSlips || ReferenceEquals(s.Item, item))
+                else if (s.Card == null || s.Version != Settings.Version || slips.Count >= KeptSlips
+                    || (ReferenceEquals(s.Item, item) && (s.Full == builtFull || !ReferenceEquals(s.For, r))))
                 {
                     Drop(s.Card);
                     slips.RemoveAt(i);
@@ -839,6 +877,7 @@ namespace SectionedTooltips
             b.Version = Settings.Version;
             b.Card = card;
             b.Size = cardSize;
+            b.Full = builtFull;
             slips.Insert(0, b);
         }
 
@@ -1238,16 +1277,19 @@ namespace SectionedTooltips
             }
             y = Mathf.Max(y, clear);
             // 大字价格下面的其他价格是明细：合成一行小字，“标价 100 · 性价比 11.1（100/9格）”。这一节里别的东西（比如“已上锁”这种标记）还是各占一行，按顺序。
-            System.Text.StringBuilder line = new System.Text.StringBuilder();
-            string dot = "<color=#" + ColorUtility.ToHtmlStringRGB(InkSoft) + ">  ·  </color>";
+            List<string> line = new List<string>();
             for (int i = 0; i < p.Prices.Count; i++)
             {
                 Row row = p.Prices[i];
                 if (!ShowPriceRow(p, row)) continue;
                 if (row.IsPair && p.Price != null && BarOf(row.Value) == null)
                 {
-                    if (line.Length > 0) line.Append(dot);
-                    line.Append(InkRich(row.Label, InkSoft, false)).Append(' ').Append(InkRich(row.Value, Ink, false));
+                    if (foldPrices)
+                    {
+                        Folded("fold_prices");
+                        continue;
+                    }
+                    line.Add(InkRich(row.Label, InkSoft, false) + " " + InkRich(row.Value, Ink, false));
                     continue;
                 }
                 y = PriceLine(c, line, y);
@@ -1257,15 +1299,29 @@ namespace SectionedTooltips
         }
 
         /// 把攒起来的价格明细写出去并清空。返回底部位置。
-        private static float PriceLine(Ctx c, System.Text.StringBuilder line, float y)
+        private static float PriceLine(Ctx c, List<string> line, float y)
         {
-            if (line.Length == 0) return y;
+            if (line.Count == 0) return y;
             float size = c.F * 0.8f;
-            string rich = line.ToString();
-            line.Length = 0;
-            TextMeshProUGUI t = Text(c, size, rich, Color.white, c.Measure(rich, size) > c.Inner ? c.Inner : 0f);
-            Ui.Move(t.rectTransform, c.Pad, y);
-            return y + t.rectTransform.sizeDelta.y + c.U;
+            string dot = "<color=#" + ColorUtility.ToHtmlStringRGB(InkSoft) + ">  ·  </color>";
+            // 一行放不下时在“·”处换行，每一项（“性价比 1051.6（16826/16格）”）不拆开；一项本身就比单子宽时才在项里折行。
+            for (int i = 0; i < line.Count; )
+            {
+                string rich = line[i];
+                int j = i + 1;
+                for (; j < line.Count; j++)
+                {
+                    string more = rich + dot + line[j];
+                    if (c.Measure(more, size) > c.Inner) break;
+                    rich = more;
+                }
+                TextMeshProUGUI t = Text(c, size, rich, Color.white, c.Measure(rich, size) > c.Inner ? c.Inner : 0f);
+                Ui.Move(t.rectTransform, c.Pad, y);
+                y += t.rectTransform.sizeDelta.y + c.U;
+                i = j;
+            }
+            line.Clear();
+            return y;
         }
 
         /// 关掉价格明细时只留大字价格：其他的“标签 …… 数值”行不要，但同一节里的标记（“已上锁”）留着；没有大字价格可留时全都留。
@@ -1297,6 +1353,51 @@ namespace SectionedTooltips
             public RectTransform Part;
             public float Top, Bottom;
             public bool Aside;
+        }
+
+        /// 只留量条（电池、液体容器）的内容物；没有量条时只剩标题“内容物 20”，装着多少东西还看得到。
+        private static ContentsInfo GaugesOnly(ContentsInfo all)
+        {
+            ContentsInfo r = new ContentsInfo();
+            r.Total = all.Total;
+            for (int g = 0; g < all.Groups.Count; g++)
+            {
+                ContentGroup src = all.Groups[g];
+                if (src.Gauges.Count == 0) continue;
+                ContentGroup dst = new ContentGroup();
+                dst.Label = src.Label;
+                dst.Gauges.AddRange(src.Gauges);
+                dst.Total = src.Total;
+                r.Groups.Add(dst);
+                r.Gauges.AddRange(src.Gauges);
+            }
+            return r;
+        }
+
+        /// 收起时单子底部的一行小字：键帽，后面是“查看价格明细、描述”。返回底部。
+        private static float FoldHint(Ctx c, float y)
+        {
+            // 一道虚线把提示和上面的内容隔开，它和下面的条形码、单号是一组，不是一条数据。
+            y += c.Gap;
+            Dashes(c, c.Pad, y, c.Inner, 3f * c.U, 2f * c.U, c.U, PaperEdge);
+            y += c.U + c.Gap;
+            float size = c.F * 0.7f, px = 2f * c.U;
+            TextMeshProUGUI key = Text(c, size, Tint(Expand.Cap, Ink), Color.white, 0f);
+            Vector2 ks = key.rectTransform.sizeDelta;
+            float kw = Mathf.Round(ks.x + 2f * px), kh = Mathf.Round(ks.y);
+            Ui.Move(key.rectTransform, c.Pad + px, y);
+            // 实心键帽：比纸深一档的底，底边再深一档，像一颗键。
+            Solid(c, Track(), c.Pad, y, kw, kh);
+            Solid(c, Color.Lerp(Paper, InkSoft, darkPaper ? 0.6f : 0.5f), c.Pad, y + kh, kw, 2f * c.U);
+            kh += 2f * c.U;
+            // 分隔符是英文逗号时补一个空格（csv 里的值会被去掉首尾空白）。
+            string sep = SectionedTooltipsMod.L("fold_sep");
+            if (sep.Length == 1 && sep[0] < 128) sep += " ";
+            string text = string.Format(SectionedTooltipsMod.L("fold_view"), string.Join(sep, folded.ToArray()));
+            float x = c.Pad + kw + c.Gap;
+            TextMeshProUGUI t = Text(c, size, Tint(text, InkSoft), Color.white, c.W - c.Pad - x);
+            Ui.Move(t.rectTransform, x, y);
+            return y + Mathf.Max(kh, t.rectTransform.sizeDelta.y);
         }
 
         /// 当前这块画到 y 为止。
