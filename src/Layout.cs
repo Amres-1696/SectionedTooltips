@@ -809,8 +809,16 @@ namespace SectionedTooltips
             List<Unit> u = TextUnits.TrimEnd(TextUnits.TrimStart(units));
             string name, number;
             if (!TextRules.NameNumber(TextUnits.Plain(u), out name, out number)) return null;
-            // 数值是去掉首尾空白后的那段结尾，找到它从第几个单元开始。
-            int at = TextUnits.Plain(u).Length - number.Length, cum = 0, split = -1;
+            Row r = SplitTail(u, number, source);
+            if (r != null) AddFractionBar(r, number);
+            return r;
+        }
+
+        /// 把一行在结尾那段 tail 前切成标签和数值；tail 是去掉首尾空白后文字的结尾。按单元切，两边都保留原来的颜色。切不开返回 null。
+        private static Row SplitTail(List<Unit> units, string tail, List<Seg> source)
+        {
+            List<Unit> u = TextUnits.TrimEnd(TextUnits.TrimStart(units));
+            int at = TextUnits.Plain(u).Length - tail.Length, cum = 0, split = -1;
             for (int i = 0; i < u.Count; i++)
             {
                 if (cum == at && !u[i].Tag) { split = i; break; }
@@ -820,7 +828,6 @@ namespace SectionedTooltips
             Row r = new Row();
             r.Label = TextUnits.ToSegs(TextUnits.TrimEnd(u.GetRange(0, split)), source);
             r.Value = TextUnits.ToSegs(u.GetRange(split, u.Count - split), source);
-            AddFractionBar(r, number);
             return r;
         }
 
@@ -919,18 +926,11 @@ namespace SectionedTooltips
             if (split <= 0 && pairs && cells == null)
             {
                 string tailLabel, tailValue;
-                if (TextRules.TrailingPercent(l.Plain, out tailLabel, out tailValue))
+                if (TextRules.TrailingPercent(TextUnits.Plain(u), out tailLabel, out tailValue))
                 {
-                    Row pr = new Row();
-                    pr.Label = new List<Seg>();
-                    Seg name = new Seg();
-                    name.Text = tailLabel;
-                    pr.Label.Add(name);
-                    pr.Value = new List<Seg>();
-                    Seg num = new Seg();
-                    num.Text = tailValue;
-                    pr.Value.Add(num);
-                    return pr;
+                    // 按单元切：DNA 盘、种子效果整行是游戏给的绿或红，拆开后两边都要带着。
+                    Row pr = SplitTail(u, tailValue, l.Segs);
+                    if (pr != null) return pr;
                 }
             }
 
@@ -940,7 +940,9 @@ namespace SectionedTooltips
                 List<Unit> value = TextUnits.TrimStart(u.GetRange(valueStart, u.Count - valueStart));
                 string lp = TextUnits.Plain(label).Trim();
                 string vp = TextUnits.Plain(value).Trim();
-                if (pairs && lp.Length > 0 && vp.Length > 0 && TextUnits.Width(label) <= maxLabel && !char.IsDigit(lp[lp.Length - 1]))
+                // 冒号两边都是数字的是时间、比例（“12:30”），不拆；“繁殖力强1: 种子产量 +25%”（写入种子的特性，名字带等级）要拆。
+                bool numeric = lp.Length > 0 && vp.Length > 0 && char.IsDigit(lp[lp.Length - 1]) && char.IsDigit(vp[0]);
+                if (pairs && lp.Length > 0 && vp.Length > 0 && TextUnits.Width(label) <= maxLabel && !numeric)
                 {
                     Row pair = new Row();
                     pair.Label = Recolor(TextUnits.ToSegs(label, l.Segs), Palette.LightGray);
