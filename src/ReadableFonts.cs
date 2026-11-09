@@ -31,9 +31,12 @@ namespace SectionedTooltips
                 if (Time.unscaledTime - checkedAt > 2f)
                 {
                     checkedAt = Time.unscaledTime;
+                    bool was = active;
                     active = false;
                     try { active = GameObject.Find(ControllerName) != null && Chinese(); }
                     catch { }
+                    // 存着的估价单是按另一种字号建的：换语言或开关它之后都要重建。
+                    if (active != was) Settings.Version++;
                 }
                 return active;
             }

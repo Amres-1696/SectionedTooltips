@@ -164,7 +164,7 @@ namespace SectionedTooltips
             Raise();
             Fade(win);
 #if DEVDUMP
-            if (card != null) Shots.Seen(card, DumpName(item) + (builtFull ? (Expand.Enabled ? " 展开" : "") : " 收起"));
+            if (card != null) Shots.Seen(card, SlipName(item));
 #endif
         }
 
@@ -775,7 +775,7 @@ namespace SectionedTooltips
                 Rect cr = card.rect;
                 float cw = Mathf.Round(Mathf.Max(w, cr.width)), ch = Mathf.Round(Mathf.Max(h, cr.height));
                 StringBuilder sb = new StringBuilder(2048);
-                sb.Append("[slip] ").Append(Clean(DumpName(item)))
+                sb.Append("[slip] ").Append(Clean(SlipName(item)))
                   .Append(' ').Append(cw).Append('x').Append(ch);
                 TextMeshProUGUI[] texts = card.GetComponentsInChildren<TextMeshProUGUI>(true);
                 Vector3[] corners = new Vector3[4];
@@ -805,7 +805,7 @@ namespace SectionedTooltips
                 if (all.Length > 0)
                 {
                     StringBuilder qb = new StringBuilder(4096);
-                    qb.Append("[quad] ").Append(Clean(DumpName(item)));
+                    qb.Append("[quad] ").Append(Clean(SlipName(item)));
                     for (int k = 0; k < all.Length; k++)
                     {
                         Quads quads = all[k];
@@ -829,12 +829,22 @@ namespace SectionedTooltips
                 }
                 if (slipRoom < float.MaxValue && slipRoomW < float.MaxValue)
                     SectionedTooltipsMod.Log(string.Format(CultureInfo.InvariantCulture, "[room] {0} {1:F0} {2:F0} {3:F4} {4:F2}",
-                        Clean(DumpName(item)), slipRoom, slipRoomW, card.localScale.x, builtFit));
+                        Clean(SlipName(item)), slipRoom, slipRoomW, card.localScale.x, builtFit));
             }
             catch (Exception e)
             {
                 SectionedTooltipsMod.Log("导出这张单子失败：" + e.Message);
             }
+        }
+
+        /// 日志和截图里这张单子的名字：同一件物品收起的、展开的各记各的，比较时不会互相覆盖。
+        private static string SlipName(GameItemElement item)
+        {
+            string name = DumpName(item);
+#if DEVDUMP
+            if (Stress.Label != null) return name;
+#endif
+            return builtFull ? (Expand.Enabled ? name + " 展开" : name) : name + " 收起";
         }
 
         private static string DumpName(GameItemElement item)

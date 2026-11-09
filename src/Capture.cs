@@ -153,7 +153,7 @@ namespace SectionedTooltips
     {
         private static GameItemElement checkedItem;
 
-        /// 调试用：从我们的 prefix（最先）到 postfix（最后），即游戏和其他模组的耗时。
+        /// 调试用：从我们的 prefix（最先）到 finalizer（所有 postfix 之后），即游戏和其他模组的耗时。
         internal static readonly System.Diagnostics.Stopwatch BasicTimer = new System.Diagnostics.Stopwatch();
         internal static double BasicMs;
 
@@ -175,9 +175,16 @@ namespace SectionedTooltips
             Capture.Push(__instance);
         }
 
-        // 排在最后，其他模组 postfix 加的文本也能一起排版。
+        // 在 finalizer 里排版：它在所有模组的 postfix 之后运行，不管加载顺序，其他模组 postfix 加的文本都能一起排版。
         [HarmonyPriority(Priority.Last)]
-        private static void Postfix(GameItemElement __instance, RichTextBuilder __result)
+        private static Exception Finalizer(Exception __exception, GameItemElement __instance, RichTextBuilder __result)
+        {
+            if (__exception == null) Arrange(__instance, __result);
+            Capture.Pop();
+            return __exception;
+        }
+
+        private static void Arrange(GameItemElement __instance, RichTextBuilder __result)
         {
 #if DEVDUMP
             if (DumpAll.Running && __result != null)
@@ -211,12 +218,6 @@ namespace SectionedTooltips
                 // 连续失败到上限就不再排版，工具提示退回原版。
                 Fuse.Fail(Fuse.LayoutKey, e);
             }
-        }
-
-        private static Exception Finalizer(Exception __exception)
-        {
-            Capture.Pop();
-            return __exception;
         }
     }
 }
