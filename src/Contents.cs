@@ -80,7 +80,12 @@ namespace SectionedTooltips
                 if (LockHelper.IsCurrentlyLocked(item)) return null;
                 PixelWindow window = item.contentWindow;
                 if (window == null) return null;
-                if (item.IsTag("LOCK_TYPE") && window.isLocked) return null;
+                // 两套锁开锁前都会把窗口标成 isLocked：LOCK_TYPE（保险箱/枪柜，走 Lock）与
+                // LOCKED_CONTAINER_TAG（物资箱/安全箱等，走 LockUpContainer）。不能只看
+                // IsCurrentlyLocked：它要求物品已拥有（IS_OWNED_TAG），商店货架上还没买的
+                // 箱子会被当成“没锁”，我们抢走内容物、又因 ITEM_BEHIND_LOCK_TAG 一件都画不
+                // 出来，等于把 Item Details 的密封箱透视封死。
+                if (window.isLocked) return null;
 
                 List<Part> list = new List<Part>();
                 PixelElement root = window.childElement;
