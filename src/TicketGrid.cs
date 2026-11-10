@@ -31,7 +31,7 @@ namespace SectionedTooltips
             note = "";
             string rich = InkRich(row.Label, InkSoft, false);
             if (!strip && c.Measure(rich, RowSize(c)) <= LabelCap(c)) return rich;
-            string plain = PlainOf(row.Label).Trim();
+            string plain = TextUnits.Plain(row.Label).Trim();
             int open = TextRules.TrailingGroup(plain);
             if (open <= 0) return rich;
             note = plain.Substring(open + 1, plain.Length - open - 2).Trim();
@@ -45,7 +45,7 @@ namespace SectionedTooltips
             {
                 Row row = bl.Rows[i];
                 if (!row.IsPair || UpgradeOf(row) != null || EffectOf(row) != null) continue;
-                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(PlainOf(row.Label).Trim()) > 0) return true;
+                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(TextUnits.Plain(row.Label).Trim()) > 0) return true;
             }
             return false;
         }
@@ -102,7 +102,7 @@ namespace SectionedTooltips
                 any = true;
             }
             if (!one) return ValueInks(segs);
-            string plain = PlainOf(segs).Trim(), main = plain, note = "";
+            string plain = TextUnits.Plain(segs).Trim(), main = plain, note = "";
             int open = TextRules.TrailingGroup(plain);
             if (open > 0)
             {
@@ -228,7 +228,7 @@ namespace SectionedTooltips
             for (int i = 1; i < bl.Rows.Count; i++)
             {
                 Row row = bl.Rows[i];
-                if (!row.IsPair || PlainOf(row.Label).Trim().TrimEnd(':', '：') != word) continue;
+                if (!row.IsPair || TextUnits.Plain(row.Label).Trim().TrimEnd(':', '：') != word) continue;
                 int n = Reading(bl, i) != null ? 2 : 1;
                 Block moved = new Block();
                 moved.Key = bl.Key;
@@ -276,7 +276,7 @@ namespace SectionedTooltips
                 if (row.Heading)
                 {
                     if (module && Settings.Debug != null && Settings.Debug.Value)
-                        SectionedTooltipsMod.Log(string.Format("模块节：标签列 {0:F0}px，值列 {1:F0}px，小标题「{2}」", c.LabelCol, ValueX(c), PlainOf(row.Label).Trim()));
+                        SectionedTooltipsMod.Log(string.Format("模块节：标签列 {0:F0}px，值列 {1:F0}px，小标题「{2}」", c.LabelCol, ValueX(c), TextUnits.Plain(row.Label).Trim()));
                     if (pending != null) y = GridLine(c, pending, y);
                     pending = InkRich(row.Label, InkSoft, false);
                     headed = true;
@@ -500,7 +500,7 @@ namespace SectionedTooltips
                     List<List<Seg>> cells = bl.Rows[i].Cells;
                     if (cells == null || cells.Count < 2) continue;
                     bool numbers = true;
-                    for (int k = 1; k < cells.Count; k++) if (!TextRules.StartsWithNumber(PlainOf(cells[k]).Trim())) numbers = false;
+                    for (int k = 1; k < cells.Count; k++) if (!TextRules.StartsWithNumber(TextUnits.Plain(cells[k]).Trim())) numbers = false;
                     if (!numbers) continue;
                     for (int k = 1; k < cells.Count; k++)
                     {
@@ -532,7 +532,7 @@ namespace SectionedTooltips
         {
             int n = row.Cells.Count;
             if (n < 2) return false;
-            for (int k = 1; k < n; k++) if (!TextRules.StartsWithNumber(PlainOf(row.Cells[k]).Trim())) return false;
+            for (int k = 1; k < n; k++) if (!TextRules.StartsWithNumber(TextUnits.Plain(row.Cells[k]).Trim())) return false;
             return x + c.Measure(CellRich(row.Cells[0], true), RowSize(c)) + c.Gap <= ValueX(c) + BarW(c) + c.Gap;
         }
 
@@ -593,7 +593,7 @@ namespace SectionedTooltips
         private static string PairValue(List<Seg> value, Row reading)
         {
             string text = ValueRich(value);
-            if (reading != null) text = Tint(PlainOf(reading.Segs).Trim(), Ink) + "  " + text;
+            if (reading != null) text = Tint(TextUnits.Plain(reading.Segs).Trim(), Ink) + "  " + text;
             return text;
         }
 
@@ -619,7 +619,7 @@ namespace SectionedTooltips
             if (!row.IsPair || BarOf(row.Value) != null || i + 1 >= bl.Rows.Count) return null;
             Row next = bl.Rows[i + 1];
             if (next.IsPair || next.Heading || BarOf(next.Segs) == null) return null;
-            string t = PlainOf(next.Segs).Trim();
+            string t = TextUnits.Plain(next.Segs).Trim();
             if (t.Length == 0) return null;
             for (int k = 0; k < t.Length; k++) if (!char.IsDigit(t[k]) && " ./%".IndexOf(t[k]) < 0) return null;
             return next;
@@ -668,7 +668,7 @@ namespace SectionedTooltips
         /// 有进度条时，“(115/112)”外面那对括号只是原版用来和条隔开的，去掉。
         private static List<Seg> Unparen(List<Seg> segs)
         {
-            string plain = PlainOf(segs).Trim();
+            string plain = TextUnits.Plain(segs).Trim();
             float a, b;
             if (plain.Length < 5 || plain[0] != '(' || plain[plain.Length - 1] != ')'
                 || !TextRules.ParseFraction(plain.Substring(1, plain.Length - 2), out a, out b)) return segs;
@@ -919,7 +919,7 @@ namespace SectionedTooltips
                     float cw = c.Measure(ValueInks(cells[k]), size);
                     int column = TabLayout.Column(k, cells.Count, count);
                     if (cw > w[column]) w[column] = cw;
-                    if (!TextRules.StartsWithNumber(PlainOf(cells[k]).Trim())) right[column] = false;
+                    if (!TextRules.StartsWithNumber(TextUnits.Plain(cells[k]).Trim())) right[column] = false;
                 }
             }
             TabLayout tab = new TabLayout(w, right, Mathf.Round(c.Gap * TabGapFactor), size);
@@ -965,7 +965,7 @@ namespace SectionedTooltips
         {
             negative = false;
             if (row.IsPair || row.Heading || row.Segs == null) return false;
-            string s = PlainOf(row.Segs).Trim();
+            string s = TextUnits.Plain(row.Segs).Trim();
             if (s.Length < 2) return false;
             if (s[0] == '+') return s[1] == '.' || char.IsDigit(s[1]);
             if (s[0] != '-' && s[0] != '−') return false;
@@ -997,7 +997,7 @@ namespace SectionedTooltips
         /// “精工扩舱 0/12 | 养殖区 12x8 | 剩余升级次数：12”拆成标签/数值行；拆不开返回 null。
         private static List<Row> PipeParts(Row row)
         {
-            string plain = PlainOf(row.Segs).Trim();
+            string plain = TextUnits.Plain(row.Segs).Trim();
             if (plain.IndexOf('|') < 0 || BarOf(row.Segs) != null) return null;
             string[] bits = plain.Split('|');
             if (bits.Length < 2) return null;
@@ -1032,14 +1032,14 @@ namespace SectionedTooltips
         private static Upgrade UpgradeOf(Row row)
         {
             if (!row.IsPair || BarOf(row.Value) == null) return null;
-            string v = PlainOf(row.Value).Trim();
+            string v = TextUnits.Plain(row.Value).Trim();
             int slash = v.IndexOf('/');
             int level, max;
             if (slash <= 0
                 || !int.TryParse(v.Substring(0, slash).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out level)
                 || !int.TryParse(v.Substring(slash + 1).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out max)
                 || max <= 0 || level < 0 || level > max) return null;
-            string label = PlainOf(row.Label).Trim();
+            string label = TextUnits.Plain(row.Label).Trim();
             int open = TextRules.TrailingGroup(label);
             Upgrade u = new Upgrade();
             u.Level = level;
@@ -1172,13 +1172,13 @@ namespace SectionedTooltips
         private static Effect EffectOf(Row row)
         {
             if (!row.IsPair || BarOf(row.Value) != null) return null;
-            string v = PlainOf(row.Value).Trim();
+            string v = TextUnits.Plain(row.Value).Trim();
             if (v.Length < 3 || (v[0] != '+' && v[0] != '-' && v[0] != '−')) return null;
             int i = 1;
             while (i < v.Length && (char.IsDigit(v[i]) || v[i] == '.')) i++;
             if (i == 1 || i >= v.Length || v[i] != '%') return null;
             Effect e = new Effect();
-            e.Name = PlainOf(row.Label).Trim().TrimStart('-', '−').Trim();
+            e.Name = TextUnits.Plain(row.Label).Trim().TrimStart('-', '−').Trim();
             if (e.Name.Length == 0) return null;
             e.Percent = v.Substring(0, i + 1);
             e.Negative = v[0] != '+';

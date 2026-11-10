@@ -179,6 +179,15 @@ namespace SectionedTooltips
             return sb.ToString();
         }
 
+        /// 几段文字连起来的纯文字；进度条那段不算。
+        internal static string Plain(List<Seg> segs)
+        {
+            if (segs == null) return "";
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < segs.Count; i++) if (segs[i].Bar == null) sb.Append(segs[i].Text);
+            return Plain(sb.ToString());
+        }
+
         internal static string Plain(string text)
         {
             List<Unit> units = new List<Unit>();

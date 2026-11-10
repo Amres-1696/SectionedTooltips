@@ -43,7 +43,10 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 |---|---|
 | `src/Capture.cs` | 记 `GetTooltipBasic` 期间各 helper 写过的 slice 区间 |
 | `src/Helpers.cs` | 90 多个 tooltip helper 的 patch 表，按调用顺序编号 |
-| `src/Layout.cs` | 分节、拆标签/数值、画 Classic 风格、缓存 |
+| `src/Layout.cs` | 排版的流程：读 builder、每行归到某一节、筛选、缓存 |
+| `src/LayoutModel.cs` | 排版的数据：行、块、排版结果 |
+| `src/LayoutRows.cs` | 把行并成块、拆成标签/数值/表格 |
+| `src/LayoutClassic.cs` | Classic 风格的文字输出 |
 | `src/Ticket.cs` | 估价单的纸、印章、标题、价格、页脚、文字上色 |
 | `src/TicketGrid.cs` | 估价单的小节网格：标签列、数值列、进度条、升级、模组效果 |
 | `src/Contents.cs` | 容器和机器里装了什么、电池和液体的量条 |

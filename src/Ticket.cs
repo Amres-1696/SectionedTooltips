@@ -932,7 +932,7 @@ namespace SectionedTooltips
                         Row row = bl.Rows[j];
                         if (bl.Key == Sections.Title)
                         {
-                            string plain = PlainOf(row).Trim();
+                            string plain = row.Plain.Trim();
                             if (p.Name == null)
                             {
                                 string flag;
@@ -955,13 +955,13 @@ namespace SectionedTooltips
                         }
                         else if (bl.Key == Sections.Value)
                         {
-                            if (p.Price == null && row.IsPair && LeadingNumber(PlainOf(row.Value)).Length > 0)
+                            if (p.Price == null && row.IsPair && LeadingNumber(TextUnits.Plain(row.Value)).Length > 0)
                             {
                                 p.Price = row;
                                 List<Seg> note, tail;
                                 SplitPrice(row.Value, out note, out tail);
                                 // “预估价值：1478，基础价值：1478”：没有括号，逗号后面又是另一个值。
-                                string notePlain = PlainOf(note).Trim().TrimStart('，', ',').Trim();
+                                string notePlain = TextUnits.Plain(note).Trim().TrimStart('，', ',').Trim();
                                 if (tail.Count == 0 && notePlain.IndexOfAny(new char[] { '（', '(' }) < 0 && PairFromPlain(notePlain) != null)
                                 {
                                     tail = note;
@@ -969,7 +969,7 @@ namespace SectionedTooltips
                                 }
                                 p.NoteSegs = note;
                                 // “售价：50（进价 50） 标价：50”：括号后面的标价单独占一行。
-                                Row extra = PairFromPlain(PlainOf(tail).Trim().TrimStart('，', ','));
+                                Row extra = PairFromPlain(TextUnits.Plain(tail).Trim().TrimStart('，', ','));
                                 // 和售价一样的标价等于没说。
                                 if (extra != null && !SamePrice(p, extra)) p.Prices.Add(extra);
                             }
@@ -996,7 +996,7 @@ namespace SectionedTooltips
             string mark;
             try { mark = TextUnits.Plain(LocHelper.GetLocalizedMechanic("mech_tooltip_not_owned") ?? "").Trim(); }
             catch { return row; }
-            if (mark.Length == 0 || !PlainOf(row.Segs).TrimStart().StartsWith(mark, StringComparison.Ordinal)) return row;
+            if (mark.Length == 0 || !TextUnits.Plain(row.Segs).TrimStart().StartsWith(mark, StringComparison.Ordinal)) return row;
             Row name = DropFront(row, mark.Length);
             if (name == null) return row;
             flag = mark;
@@ -1006,13 +1006,13 @@ namespace SectionedTooltips
         /// row 是不是只是把大字价格又说了一遍（“售价：1680”下面的“标价：1680”）。
         private static bool SamePrice(Parts p, Row row)
         {
-            return p.Price != null && row.IsPair && PlainOf(row.Value).Trim() == LeadingNumber(PlainOf(p.Price.Value));
+            return p.Price != null && row.IsPair && TextUnits.Plain(row.Value).Trim() == LeadingNumber(TextUnits.Plain(p.Price.Value));
         }
 
         /// 去掉游戏“[标签]”前缀后的标签行：“破旧 -75%”。
         private static string FeatureOf(Row row)
         {
-            string plain = (row.IsPair ? PlainOf(row.Label) + " " + PlainOf(row.Value) : PlainOf(row)).Trim();
+            string plain = (row.IsPair ? TextUnits.Plain(row.Label) + " " + TextUnits.Plain(row.Value) : row.Plain).Trim();
             string mark;
             try { mark = TextUnits.Plain(LocHelper.GetLocalizedMechanic("mech_label_tooltip_prefix") ?? "").Trim(); }
             catch { mark = ""; }
@@ -1053,7 +1053,7 @@ namespace SectionedTooltips
                 rest.Add(s.With(t.Substring(left).TrimStart()));
                 left = 0;
             }
-            if (PlainOf(rest).Trim().Length == 0) return null;
+            if (TextUnits.Plain(rest).Trim().Length == 0) return null;
             Row r = new Row();
             r.Segs = rest;
             r.Ord = row.Ord;
@@ -1216,7 +1216,7 @@ namespace SectionedTooltips
         internal static void PrepareIcons(List<ContentEntry> entries, int shown)
         {
             iconBatch.Clear();
-            for (int i = 0; i < shown && i < entries.Count; i++) iconBatch.Add(Overlay.IconOf(entries[i].Item));
+            for (int i = 0; i < shown && i < entries.Count; i++) iconBatch.Add(Icons.IconOf(entries[i].Item));
             Icons.Prepare(iconBatch);
             iconBatch.Clear();
         }
@@ -1224,7 +1224,7 @@ namespace SectionedTooltips
         /// 标题用的物品图标；没有图标或设置关掉时为 null。
         private static Sprite IconFor(GameItemElement item)
         {
-            return Settings.On(Settings.Icon) ? Overlay.IconOf(item) : null;
+            return Settings.On(Settings.Icon) ? Icons.IconOf(item) : null;
         }
 
         private static float Title(Ctx c, Parts p, GameItemElement item, float y)
@@ -1343,7 +1343,7 @@ namespace SectionedTooltips
             for (int i = 0; i < p.Prices.Count; i++)
             {
                 Row row = p.Prices[i];
-                if (ShowPriceRow(p, row) && row.IsPair && BarOf(row.Value) == null && TextRules.PerCellValue(PlainOf(row.Value))) return row;
+                if (ShowPriceRow(p, row) && row.IsPair && BarOf(row.Value) == null && TextRules.PerCellValue(TextUnits.Plain(row.Value))) return row;
             }
             return null;
         }
@@ -1393,7 +1393,7 @@ namespace SectionedTooltips
 
         private static string BigPrice(Parts p)
         {
-            return "<b>" + LeadingNumber(PlainOf(p.Price.Value)) + "</b>";
+            return "<b>" + LeadingNumber(TextUnits.Plain(p.Price.Value)) + "</b>";
         }
 
         /// 这一节要不要画成估价单的一节。名称、价格、描述各有位置；装载那一节只有游戏的“双击打开”。
@@ -1679,7 +1679,7 @@ namespace SectionedTooltips
                     Ui.Move(m.rectTransform, x + Mathf.Round((cell - s.x) / 2f), cy + Mathf.Round((cell - s.y) / 2f));
                     continue;
                 }
-                Sprite icon = Overlay.IconOf(entries[i].Item);
+                Sprite icon = Icons.IconOf(entries[i].Item);
                 if (icon != null) PlaceIcon(c, icon, x, cy, cell, bare ? 0f : 2f * c.U);
                 if (entries[i].Count > 1)
                 {
@@ -1712,10 +1712,10 @@ namespace SectionedTooltips
             for (int i = 0; i < p.Desc.Count; i++)
             {
                 StringBuilder sb = new StringBuilder(InkRich(Trimmed(p.Desc[i].Segs), InkSoft));
-                string last = PlainOf(p.Desc[i]).Trim();
+                string last = p.Desc[i].Plain.Trim();
                 while (i + 1 < p.Desc.Count)
                 {
-                    string next = PlainOf(p.Desc[i + 1]).Trim();
+                    string next = p.Desc[i + 1].Plain.Trim();
                     string joint = Joint(source, last, next);
                     if (joint == null) break;
                     sb.Append(joint).Append(InkRich(Trimmed(p.Desc[i + 1].Segs), InkSoft));
@@ -1929,7 +1929,7 @@ namespace SectionedTooltips
         private static List<Chip> ChipsOf(GameItem item, Row row)
         {
             if (item == null) return null;
-            string plain = PlainOf(row).Trim();
+            string plain = row.Plain.Trim();
             if (plain.Length == 0 || plain[0] != '[') return null;
             List<string> types;
             try { types = item.GetGameItemType(); }
@@ -2216,19 +2216,6 @@ namespace SectionedTooltips
                 sb.Append("</color>");
             }
             return sb.ToString().Trim();
-        }
-
-        internal static string PlainOf(Row row)
-        {
-            return PlainOf(row.Segs ?? row.Label);
-        }
-
-        internal static string PlainOf(List<Seg> segs)
-        {
-            if (segs == null) return "";
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < segs.Count; i++) if (segs[i].Bar == null) sb.Append(segs[i].Text);
-            return TextUnits.Plain(sb.ToString());
         }
 
         /// 估价单自己画的进度条。关掉图形进度条时，游戏自己的文字进度条（“[====    ]”）留在文字里，和经典风格一样。

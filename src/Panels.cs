@@ -325,7 +325,7 @@ namespace SectionedTooltips
                     continue;
                 }
 
-                Sprite icon = Overlay.IconOf(entries[i].Item);
+                Sprite icon = Icons.IconOf(entries[i].Item);
                 if (icon != null)
                 {
                     float iw, ih;

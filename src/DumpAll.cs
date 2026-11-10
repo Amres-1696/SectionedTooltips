@@ -269,11 +269,11 @@ namespace SectionedTooltips
 
         private static string Shape(Row row)
         {
-            if (row.Heading) return "H[" + Flat(Ticket.PlainOf(row.Label)).Trim() + "]";
+            if (row.Heading) return "H[" + Flat(TextUnits.Plain(row.Label)).Trim() + "]";
             if (row.IsPair)
-                return (row.Wide ? "W" : "") + "P[" + Flat(Ticket.PlainOf(row.Label)).Trim() + "|" + Flat(Ticket.PlainOf(row.Value)).Trim() + "]";
-            if (row.Cells != null && row.Cells.Count > 1) return "C" + row.Cells.Count + "[" + Flat(Ticket.PlainOf(row.Segs)).Trim() + "]";
-            return "T[" + Flat(Ticket.PlainOf(row.Segs)).Trim() + "]";
+                return (row.Wide ? "W" : "") + "P[" + Flat(TextUnits.Plain(row.Label)).Trim() + "|" + Flat(TextUnits.Plain(row.Value)).Trim() + "]";
+            if (row.Cells != null && row.Cells.Count > 1) return "C" + row.Cells.Count + "[" + Flat(TextUnits.Plain(row.Segs)).Trim() + "]";
+            return "T[" + Flat(TextUnits.Plain(row.Segs)).Trim() + "]";
         }
 
         /// 文件头：影响排版的设置，以及哪些模组改了 tooltip。对比时先看这几行一样不一样。
@@ -334,14 +334,14 @@ namespace SectionedTooltips
                     {
                         Row row = bl.Rows[j];
                         Text.Append('\t').Append(bl.Key).Append('\t');
-                        if (row.Heading) Text.Append("(标题) ").Append(Flat(Ticket.PlainOf(row.Label)));
+                        if (row.Heading) Text.Append("(标题) ").Append(Flat(TextUnits.Plain(row.Label)));
                         else if (row.IsPair)
                         {
-                            Text.Append(Flat(Ticket.PlainOf(row.Label))).Append(" = ")
-                                .Append(Flat(Ticket.PlainOf(row.Value)));
+                            Text.Append(Flat(TextUnits.Plain(row.Label))).Append(" = ")
+                                .Append(Flat(TextUnits.Plain(row.Value)));
                             if (row.Wide) Text.Append("  [整行]");
                         }
-                        else Text.Append(Flat(Ticket.PlainOf(row.Segs)));
+                        else Text.Append(Flat(TextUnits.Plain(row.Segs)));
                         Text.Append(Marks(row));
                         Text.Append('\n');
                     }
