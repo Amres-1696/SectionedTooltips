@@ -294,7 +294,7 @@ namespace SectionedTooltips
             public float Px = 1f;  // 每个卡片单位占多少屏幕像素，图标要对齐整像素（见 PixelFit）
             public List<Piece> Pieces;  // 分栏用的各块（见 Flow）
             public bool Fine;           // 每行另起一块，一节可以从中间断到下一栏（单子比窗口高时才这样重建）
-            public float Lift = 1f;     // 字号抬高的倍数，卡片整张缩回这么多（见 ReadableFonts）
+            public float Lift = 1f;     // 字号抬高的倍数，卡片整张缩回这么多（见 Compat.SmallTextResized）
             public float Room = float.MaxValue;  // 窗口高度，用这张卡片的单位
             public float Inner { get { return W - 2f * Pad; } }
             /// 卡片上的实心矩形，合成一个 mesh，画在纸上面、所有文字和图标下面。
@@ -565,14 +565,13 @@ namespace SectionedTooltips
 
             Ctx c = new Ctx();
             // Measure 会抵掉根节点的缩放（文字在屏幕上和游戏一样大），所以大小设置要在这里乘进去。
-            // 「字体大小优化」开着时：它会把 16 号以下的字放大（我们排版时不知道，就会重叠）。我们自己先放大 1.2 倍，
-            // 再把所有字号抬到 16 以上、整张按同样比例缩回去，看起来一样大，它也就不再动我们的字（见 ReadableFonts）。
-            float boost = 1f, lift = 1f;
-            if (ReadableFonts.Active)
+            // 有模组会在建好后放大小字号时（见 Compat.SmallTextResized）：我们排版时不知道，就会重叠。所以自己先放大同样倍数，
+            // 再把所有字号抬到它不再动的字号以上、整张按同样比例缩回去，看起来一样大，它也就不再动我们的字。
+            float boost, floor, lift = 1f;
+            if (Compat.SmallTextResized(out boost, out floor))
             {
-                boost = ReadableFonts.Boost;
                 Panels.Metrics plain = Panels.Measure(tmp, root, Settings.ScaleFactor * boost);
-                lift = Mathf.Max(1f, ReadableFonts.Floor / (plain.Font * MinFontShare));
+                lift = Mathf.Max(1f, floor / (plain.Font * MinFontShare));
             }
             c.M = Panels.Measure(tmp, root, Settings.ScaleFactor * boost * lift);
             c.Lift = lift;

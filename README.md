@@ -52,8 +52,9 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/Icons.cs` | 物品图标的副本：裁掉透明边，按方框大小放大 |
 | `src/SettingsPanel.cs` | 设置面板补丁：滑块数值、色块、示例单 |
 | `src/TicketSample.cs` | 示例单和 Classic 示例 |
+| `src/Compat.cs` | 和其他模组兼容的统一入口：核心流程只调它的钩子，每个兼容件各有熔断 |
 | `src/ItemDetailsBridge.cs` | 和 Item Details 的对接：排版声明、tooltip 锚点 |
-| `src/ItemDetailsSections.cs` | 读 Item Details 的区块协议，把它的行归到对应小节 |
+| `src/ItemDetailsSections.cs` | 读 Item Details 的区块协议，把它的行归到对应小节（区块 id 到小节的映射也在这里） |
 | `src/AquaSense.cs` | 读《更好的水商操作体验》的成分接口，把它的成分行画成进度条 |
 | `src/ReadableFonts.cs` | 和《字体大小优化》的兼容：它开着时估价单自己放大，字号抬到它不改的范围 |
 | `src/Expand.cs` | 平时收起、按住展开键看完整估价单 |

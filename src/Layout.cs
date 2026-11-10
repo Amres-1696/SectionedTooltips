@@ -140,10 +140,8 @@ namespace SectionedTooltips
 #if DEVDUMP
             if (DumpAll.Running) DumpAll.Input(lines);
 #endif
-            // Item Details 的区块：把它的行归到对应的小节，不再靠文本猜（没装它时为 null）。
-            RekeySections(lines, ItemDetailsSections.Read(b));
-            // AquaSense 的成分条画在原版文字上，估价单看不到：按它的接口换成我们画的条（没装它时什么都不做）。
-            AquaSense.Apply(lines, f.Item);
+            // 其他模组写的行先修成我们认识的样子（归到对应小节、换成我们画的条），再做下面的筛选。
+            Compat.Normalize(f.Item, b, lines);
             SplitCustomName(lines, f.Item);
             MarkDescription(lines, f.Item);
             // 玩家关掉的部分，两种风格都适用。
@@ -506,118 +504,6 @@ namespace SectionedTooltips
                 int min = i > 0 && lines[i - 1].Key == Sections.Desc ? 1 : 4;
                 if (l.FromHelper || l.Key == Sections.Title || l.Plain.Length < min) continue;
                 if (desc.IndexOf(l.Plain, StringComparison.Ordinal) >= 0) l.Key = Sections.Desc;
-            }
-        }
-
-        /// 用 Item Details 的区块把它的行改判到我们的小节。
-        private static void RekeySections(List<Line> lines, ItemDetailsSections.Result data)
-        {
-            if (data == null) return;
-            Dictionary<string, string> sections = data.LineToSection;
-            for (int i = 0; i < lines.Count; i++)
-            {
-                string id;
-                if (!sections.TryGetValue(lines[i].Plain, out id)) continue;
-                string key = SectionOf(id);
-                // 既有 id 映射优先；认不出时才采用可选归属组，减少新增区块的映射维护。
-                if (key == null)
-                {
-                    string group;
-                    if (data.LineToGroup.TryGetValue(lines[i].Plain, out group)) key = SectionOfGroup(group);
-                }
-                if (key != null) lines[i].Key = key;
-            }
-            // 成分表不在区块的 runs 里，但 rows 字段给了每行的名称/用量/百分比，按它认。
-            if (data.Components.Count > 0) RekeyComponents(lines, data.Components);
-        }
-
-        /// 用区块给出的成分行（“水 9.1L 91.04%”）把对应的文本行归到液体。
-        private static void RekeyComponents(List<Line> lines, List<ItemDetailsSections.ComponentRow> rows)
-        {
-            for (int i = 0; i < lines.Count; i++)
-            {
-                Line l = lines[i];
-                if (l.Key != Sections.Mods && l.Key != Sections.Info) continue;
-                for (int k = 0; k < rows.Count; k++)
-                {
-                    ItemDetailsSections.ComponentRow r = rows[k];
-                    if (r.Name.Length == 0 || !l.Plain.StartsWith(r.Name, StringComparison.Ordinal)) continue;
-                    if (r.Amount.Length > 0 && l.Plain.IndexOf(r.Amount, StringComparison.Ordinal) < 0) continue;
-                    if (r.Percent.Length > 0 && l.Plain.IndexOf(r.Percent, StringComparison.Ordinal) < 0) continue;
-                    l.Key = Sections.Liquid;
-                    break;
-                }
-            }
-        }
-
-        /// 可选归属组；只收画法固定、真有标题栏的小节。
-        /// label / price / contents 保持原有处理：标签列、价值节自己解析、内容物面板各有各的规矩。
-        /// description 同理不收：描述不是小节——它会随「显示描述」开关整类删掉，并按段落排版。
-        private static string SectionOfGroup(string group)
-        {
-            switch (group)
-            {
-                case "liquid": return Sections.Liquid;
-                case "plant": return Sections.Plant;
-                case "machine": return Sections.Machine;
-                case "condition": return Sections.Condition;
-                case "appraisal": return Sections.Appraisal;
-                case "module": return Sections.Module;
-                case "lottery": return Sections.Lottery;
-                case "brew": return Sections.Brew;
-                case "food": return Sections.Food;
-                default: return null;
-            }
-        }
-
-        /// 区块 id 对应到我们哪一节；null 表示保持原样。
-        private static string SectionOf(string id)
-        {
-            switch (id)
-            {
-                // 区块 id 来自 Item Details 的 sdk（TooltipSectionIds），是它自己声明的归属，不是我们猜的。
-                case "water":
-                case "water-advice":
-                    return Sections.Liquid;
-                case "seed":
-                    return Sections.Plant;
-                case "machine-interior":
-                case "machine-speed":
-                case "machine-power":
-                case "machine-effect":
-                    return Sections.Machine;
-                case "conditions":
-                case "hidden":
-                case "feature-reveal":
-                    return Sections.Condition;   // 瑕疵、真实耐久、被伪装的特性
-                case "auth":
-                case "value":
-                case "injected-value":
-                case "ribwich":
-                    return Sections.Appraisal;   // 真伪、价值分解
-                case "module-learning":
-                    return Sections.Module;
-                case "lottery":
-                case "scratcher":
-                    return Sections.Lottery;
-                case "wine":
-                    return Sections.Brew;
-                case "meat":
-                case "calories":
-                case "berry":
-                    return Sections.Food;
-                case "label":
-                    return Sections.Label;
-                case "description":
-                    return Sections.Desc;
-                default:
-                    // storage / sealed-box 保持原样：0.8.x 的 storage 只剩压缩率那一行，
-                    // sealed-box 是玩家开了“透视”才有的密封箱内容——这两样我们的面板都不画，
-                    // 映射到“装载”（不画）会把它们吞掉。
-                    // price / value-enhance / market / categories 同理：价值一节有自己的价格解析。
-                    // price / value-enhance / market / categories 等保持原样：
-                    // 价值一节有自己的价格处理，塞进去反而会被当售价解析。
-                    return null;
             }
         }
 
