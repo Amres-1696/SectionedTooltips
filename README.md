@@ -49,6 +49,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/LayoutClassic.cs` | Classic 风格的文字输出 |
 | `src/Ticket.cs` | 估价单的纸、印章、标题、价格、页脚、文字上色 |
 | `src/TicketGrid.cs` | 估价单的小节网格：标签列、数值列、进度条、升级、模组效果 |
+| `src/TicketPlan.cs` | 估价单一节的“定型”：每行是升级、效果、基因、词条还是普通的一对，只判一次，画的时候按类型分支 |
 | `src/Contents.cs` | 容器和机器里装了什么、电池和液体的量条 |
 | `src/Panels.cs` | Classic 风格的侧边面板（液位计、内容物格子） |
 | `src/Overlay.cs` | 画在 tooltip 上的图标和进度条 |

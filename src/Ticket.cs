@@ -1521,22 +1521,6 @@ namespace SectionedTooltips
         }
 
 
-        /// 模组词条的名称或描述：游戏把它们写成浅蓝，属性写成浅青。
-        private static bool Affix(Row row)
-        {
-            Seg s = row.IsPair || row.Heading ? null : LeadSeg(row);
-            return s != null && s.Color == Palette.LightBlue;
-        }
-
-        /// 这一行第一个有字的 seg。
-        private static Seg LeadSeg(Row row)
-        {
-            if (row.Segs == null) return null;
-            for (int i = 0; i < row.Segs.Count; i++)
-                if (row.Segs[i].Bar == null && TextUnits.Plain(row.Segs[i].Text).Trim().Length > 0) return row.Segs[i];
-            return null;
-        }
-
         private static float Indent(Ctx c)
         {
             return Mathf.Round(c.M.Line * 0.45f);
