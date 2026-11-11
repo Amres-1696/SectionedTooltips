@@ -6,27 +6,6 @@ using Palette = RenderHandler.ColorPalette;
 
 namespace SectionedTooltips
 {
-    /// 一段样式一致的 tooltip 文本，从 RichTextBuilder 内部的 TextSlice 复制出来。
-    internal sealed class Seg
-    {
-        public string Text = "";
-        public Palette Color = Palette.None;
-        public bool Bold, Italic, Underline, Strike, NewLine;
-        public Palette Background = Palette.None;
-        public Palette UnderlineColor = Palette.None;
-        public Palette StrikeColor = Palette.None;
-
-        /// 这一段是游戏用 AddProgressBar 画的进度条时设置。
-        public BarMark Bar;
-
-        public Seg With(string text)
-        {
-            Seg s = (Seg)MemberwiseClone();
-            s.Text = text;
-            return s;
-        }
-    }
-
     /// 读 RichTextBuilder.slices 和内部 TextSlice 字段。TextSlice 是 internal，没法 typeof：每个字段用字面量名字经 Type.GetType 读，写成一句表达式，模组扫描器能通过。
     internal static class SliceAccess
     {

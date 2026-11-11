@@ -38,6 +38,20 @@ namespace SectionedTooltips
         /// 整数倍比实际可放的小不到这么多时，就用整数倍（每个像素一样大，最清楚）。
         private const float IntegerShare = 0.9f;
 
+        /// 游戏给这件物品画的图标；没有时返回 null。
+        internal static Sprite IconOf(GameItem item)
+        {
+            GameItemElement e = item as GameItemElement;
+            if (e == null) return null;
+            try
+            {
+                TreeNodeRender bg = e.background;
+                if (bg == null || bg.image == null) return null;
+                return bg.image.sprite;
+            }
+            catch { return null; }
+        }
+
         /// <summary>
         /// 把图标放进 w×h（卡片单位）的框里：px 是每单位多少屏幕像素。返回要画的 sprite 和它的大小；做不了时返回 null，调用方照旧画原图。
         /// </summary>

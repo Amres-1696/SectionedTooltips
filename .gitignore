@@ -6,3 +6,4 @@ workshop/
 build.bat
 tests/headless.exe
 manifest.dev.xml
+tests/corpus/

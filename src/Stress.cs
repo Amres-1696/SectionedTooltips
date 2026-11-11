@@ -37,6 +37,8 @@ namespace SectionedTooltips
         {
             public Case Case;
             public LayoutResult Result;
+            /// 样本（States）建的是样本自己的单子；压力用例为 null，用悬停的物品。
+            public GameItemElement Item;
         }
 
         private static readonly HashSet<string> done = new HashSet<string>();
@@ -59,7 +61,7 @@ namespace SectionedTooltips
         internal static bool Wanted(GameItem item)
         {
             // 全量导出时的物品不是玩家悬停的，不算。
-            if (item == null || DumpAll.Running || ReferenceEquals(item, readyFor)) return false;
+            if (item == null || DumpAll.Running || States.Building || ReferenceEquals(item, readyFor)) return false;
             if (Time.unscaledTime - checkedAt > 1f)
             {
                 checkedAt = Time.unscaledTime;
@@ -103,6 +105,111 @@ namespace SectionedTooltips
             SectionedTooltipsMod.Log(string.Format("压力测试：{0} 排好 {1} 个用例", name, ready.Count));
         }
 
+        // ---------------------------------------------------------------- 样本（samples.flag）
+
+        private const string SamplesFlag = "samples.flag";
+        /// 全量建单：样本之外，游戏里每一种物品也各建一张。改画法前后可以逐张比坐标；第一次悬停要卡几秒。
+        private const string SlipsFlag = "slips.flag";
+        private static bool samplesDone;
+        private static List<States.Sample> samples;
+        /// 全量建单时新建的物品，建完单子一起销毁。
+        private static readonly List<GameItem> created = new List<GameItem>();
+
+        /// 有 samples.flag 时，第一次悬停物品就把 States 的每个样本排好版，等下面和压力用例一样逐个建单、写日志。每局只跑一次。
+        /// 有 slips.flag 时再加上游戏里的每一种物品（见 PrepareAll）。
+        internal static void PrepareSamples(GameItem hovered)
+        {
+            if (samplesDone || hovered == null || ready.Count > 0) return;
+            bool wanted, everything;
+            try { everything = ModHelper.ModDataFileExists(ModId, SlipsFlag); }
+            catch { everything = false; }
+            try { wanted = everything || ModHelper.ModDataFileExists(ModId, SamplesFlag); }
+            catch { wanted = false; }
+            if (!wanted) return;
+            samplesDone = true;
+            GameItem keepItem = Layout.LastItem;
+            LayoutResult keepResult = Layout.LastResult;
+            States.Building = true;
+            try
+            {
+                System.Reflection.MethodInfo get = HarmonyLib.AccessTools.Method(typeof(GameItemElement), "GetTooltipBasic", Type.EmptyTypes);
+                samples = States.Make();
+                for (int i = 0; i < samples.Count; i++)
+                {
+                    States.Sample s = samples[i];
+                    try
+                    {
+                        States.Invoke(get, s);
+                        if (!ReferenceEquals(Layout.LastItem, s.Item) || Layout.LastResult == null)
+                        {
+                            SectionedTooltipsMod.Log("样本：" + s.Label + " 没有排版结果");
+                            continue;
+                        }
+                        Ready r = new Ready();
+                        r.Case = Make("样本·" + s.Label, null);
+                        r.Result = Layout.LastResult;
+                        r.Item = s.Item as GameItemElement;
+                        ready.Add(r);
+                    }
+                    catch (Exception e)
+                    {
+                        SectionedTooltipsMod.Log("样本：" + s.Label + " 排版失败：" + e);
+                    }
+                }
+                int sampleCount = ready.Count;
+                if (everything) PrepareAll(get);
+                readyFor = hovered;
+                SectionedTooltipsMod.Log(string.Format("样本：排好 {0} 个，全量 {1} 件", sampleCount, ready.Count - sampleCount));
+            }
+            catch (Exception e)
+            {
+                SectionedTooltipsMod.Log("样本失败：" + e);
+            }
+            finally
+            {
+                States.Building = false;
+                Layout.LastItem = keepItem;
+                Layout.LastResult = keepResult;
+            }
+        }
+
+        /// 每一种物品新建一件、排好版，排进待建的队列，名字是“全量·id”。
+        private static void PrepareAll(System.Reflection.MethodInfo get)
+        {
+            List<string> ids = DirectoryMaster.GetIdentifierList<GameItem>();
+            if (ids == null) return;
+            int failed = 0;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                GameItem item = null;
+                bool kept = false;
+                try
+                {
+                    item = States.Create(ids[i]);
+                    GameItemElement element = item as GameItemElement;
+                    if (element == null) { failed++; continue; }
+                    get.Invoke(item, null);
+                    if (!ReferenceEquals(Layout.LastItem, item) || Layout.LastResult == null) { failed++; continue; }
+                    Ready r = new Ready();
+                    r.Case = Make("全量·" + ids[i], null);
+                    r.Result = Layout.LastResult;
+                    r.Item = element;
+                    ready.Add(r);
+                    created.Add(item);
+                    kept = true;
+                }
+                catch { failed++; }
+                finally
+                {
+                    if (!kept && item != null)
+                    {
+                        try { item.Destroy(); } catch { }
+                    }
+                }
+            }
+            if (failed > 0) SectionedTooltipsMod.Log(string.Format("全量建单：{0} 件没有排版结果，跳过", failed));
+        }
+
         // ---------------------------------------------------------------- 建单阶段（Ticket.Show 里调用）
 
         /// 有排好的用例等着这件物品时返回 true。
@@ -112,7 +219,7 @@ namespace SectionedTooltips
         }
 
         /// 依次建每个用例的单子：room 是窗口高度（卡片单位），build 建一张并写日志，drop 把它丢掉。
-        internal static void Run(float room, Action<LayoutResult, float> build)
+        internal static void Run(float room, Action<LayoutResult, float, GameItemElement> build)
         {
             int ok = 0;
             try
@@ -124,7 +231,7 @@ namespace SectionedTooltips
                     bigFonts = r.Case.BigFonts;
                     try
                     {
-                        build(r.Result, room * r.Case.Room);
+                        build(r.Result, room * r.Case.Room, r.Item);
                         ok++;
                     }
                     catch (Exception e)
@@ -138,6 +245,12 @@ namespace SectionedTooltips
                 Label = null;
                 bigFonts = false;
                 ready.Clear();
+                States.Destroy(samples);
+                for (int i = 0; i < created.Count; i++)
+                {
+                    try { created[i].Destroy(); } catch { }
+                }
+                created.Clear();
             }
             SectionedTooltipsMod.Log(string.Format("压力测试：建好 {0} 张单子，窗口高 {1:F0}", ok, room));
         }
@@ -432,20 +545,31 @@ namespace SectionedTooltips
 
     internal static partial class Ticket
     {
+        static partial void DevBeforeShow(TMP_Text tmp, GameItemElement item, RectTransform parent, RectTransform win)
+        {
+            Stress.PrepareSamples(item);
+            if (!Stress.Pending(item)) return;
+            float sy0 = Mathf.Abs(root.localScale.y), sx0 = Mathf.Abs(root.localScale.x);
+            Rect screen0 = Panels.ScreenRect(parent, win);
+            RunStress(tmp, item, sy0 > 0f ? screen0.height / sy0 : float.MaxValue, sx0 > 0f ? screen0.width / sx0 : float.MaxValue);
+        }
+
+        static partial void DevShown(GameItemElement item)
+        {
+            if (card != null) Shots.Seen(card, SlipName(item));
+        }
+
         /// 压力测试：用当前的 tooltip 窗口把排好的用例逐个建成单子、写日志、丢掉，然后照常显示这件物品。
-        private static void RunStress(TMP_Text tmp, GameItemElement item, float room)
+        private static void RunStress(TMP_Text tmp, GameItemElement item, float room, float roomW)
         {
             RectTransform keepCard = card;
             Vector2 keepSize = cardSize;
-            float keepRoom = slipRoom;
-            // 压力测试的单子都按完整的建，收起与否不影响分栏和宽度的检查。
-            buildFull = true;
-            Stress.Run(room, delegate(LayoutResult r, float caseRoom)
+            Stress.Run(room, delegate(LayoutResult r, float caseRoom, GameItemElement own)
             {
-                slipRoom = caseRoom;
                 try
                 {
-                    BuildFlow(tmp, r, item);
+                    // 压力测试的单子都按完整的建，收起与否不影响分栏和宽度的检查。
+                    BuildFlow(tmp, r, own ?? item, true, caseRoom, roomW);
                 }
                 finally
                 {
@@ -456,7 +580,6 @@ namespace SectionedTooltips
             });
             card = keepCard;
             cardSize = keepSize;
-            slipRoom = keepRoom;
             // 让下面照常重建（或复用）这件物品自己的单子。
             builtFor = null;
             builtItem = null;

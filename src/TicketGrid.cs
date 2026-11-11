@@ -20,10 +20,14 @@ namespace SectionedTooltips
         private static float LabelX(Ctx c) { return c.Pad + Indent(c); }
         private static float ValueX(Ctx c) { return c.LabelCol > 0f ? LabelX(c) + c.LabelCol + 2f * c.Gap : LabelX(c); }
 
-        /// 标签超过这么多字符就在列内折行，不再加宽列。
-        private const float LabelChars = 8f;
+        /// 标签超过这么多个字宽就在列内折行，不再加宽列。中文 8 个字；
+        /// 拉丁字母只有半个字宽而单词长（“Appraisal customer chance”25 个字母），按 8 个字宽常用的标签都要折成两行，所以放到 13 个字宽。
+        private const float LabelChars = 8f, LabelCharsLatin = 13f;
 
-        private static float LabelCap(Ctx c) { return RowSize(c) * LabelChars; }
+        private static float LabelCap(Ctx c) { return RowSize(c) * (TextUnits.CjkLocale ? LabelChars : LabelCharsLatin); }
+
+        /// 标签列比中文的上限多出来的宽度：单子的宽度上限跟着放宽这么多，数值列不会因为标签列变宽而被挤窄。
+        private static float LabelExtra(Ctx c) { return Mathf.Max(0f, c.LabelCol - RowSize(c) * LabelChars); }
 
         /// 一对的标签放进标签列。太长放不下的把末尾括号让出去（“去除的污染物（昨夜）”）：括号里的内容挪到数值后面（note），标签不折行。strip 为真时（见 StripsBrackets）所有标签都这么处理，不管长短。
         private static string PairLabel(Ctx c, Row row, bool strip, out string note)
@@ -31,7 +35,7 @@ namespace SectionedTooltips
             note = "";
             string rich = InkRich(row.Label, InkSoft, false);
             if (!strip && c.Measure(rich, RowSize(c)) <= LabelCap(c)) return rich;
-            string plain = PlainOf(row.Label).Trim();
+            string plain = TextUnits.Plain(row.Label).Trim();
             int open = TextRules.TrailingGroup(plain);
             if (open <= 0) return rich;
             note = plain.Substring(open + 1, plain.Length - open - 2).Trim();
@@ -45,7 +49,7 @@ namespace SectionedTooltips
             {
                 Row row = bl.Rows[i];
                 if (!row.IsPair || UpgradeOf(row) != null || EffectOf(row) != null) continue;
-                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(PlainOf(row.Label).Trim()) > 0) return true;
+                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(TextUnits.Plain(row.Label).Trim()) > 0) return true;
             }
             return false;
         }
@@ -102,7 +106,7 @@ namespace SectionedTooltips
                 any = true;
             }
             if (!one) return ValueInks(segs);
-            string plain = PlainOf(segs).Trim(), main = plain, note = "";
+            string plain = TextUnits.Plain(segs).Trim(), main = plain, note = "";
             int open = TextRules.TrailingGroup(plain);
             if (open > 0)
             {
@@ -221,150 +225,82 @@ namespace SectionedTooltips
 
         // ---------------------------------------------------------------- 分节
 
-        /// 把状态行（“状态：生长中”和它下面的进度条）挪到最前面的块：机器在做什么，是最先要看的。是副本，块本身属于缓存的排版。
-        private static Block StatusFirst(Block bl)
+        private static float Section(Ctx c, Block source, float y)
         {
-            string word = SectionedTooltipsMod.L("row_status");
-            for (int i = 1; i < bl.Rows.Count; i++)
-            {
-                Row row = bl.Rows[i];
-                if (!row.IsPair || PlainOf(row.Label).Trim().TrimEnd(':', '：') != word) continue;
-                int n = Reading(bl, i) != null ? 2 : 1;
-                Block moved = new Block();
-                moved.Key = bl.Key;
-                moved.Rows.AddRange(bl.Rows.GetRange(i, n));
-                for (int k = 0; k < bl.Rows.Count; k++) if (k < i || k >= i + n) moved.Rows.Add(bl.Rows[k]);
-                return moved;
-            }
-            return bl;
-        }
-
-        private static float Section(Ctx c, Block bl, float y)
-        {
-            bl = StatusFirst(bl);
+            SectionPlan plan = PlanOf(c, source);
+            Block bl = plan.Block;
             y = SectionHeader(c, Sections.TitleOf(bl.Key), y);
             float left = LabelX(c);
-            bool module = bl.Key == Sections.Module, stats = false, affixes = false;
-            bool labelled = Labelled(bl), strip = StripsBrackets(c, bl);
+            bool labelled = plan.Labelled, strip = StripsBrackets(c, bl);
             TabLayout tab = TabLayoutOf(c, bl);
-            bool liquid = bl.Key == Sections.Liquid, ruled = false;
+            bool liquid = bl.Key == Sections.Liquid;
             NumCols nums = liquid ? NumColsOf(c, bl) : null;
-            // 小标题（“升级：”、“模组效果：”）给它下面没有自己标签的行当标签。
-            string pending = null;
-            bool headed = false;   // 正处在某个小标题管着的行里
-            for (int i = 0; i < bl.Rows.Count; i++)
+            for (int i = 0; i < plan.Items.Count; i++)
             {
-                Row row = bl.Rows[i];
+                PlanItem item = plan.Items[i];
+                Row row = item.Row;
                 // 单子太高时每行另起一块，可以断到下一栏；小标题和它管着的行不拆开。
-                if (i > 0 && pending == null) Split(c, y);
-                // 模组的词条和属性分开画（游戏给两者上的蓝几乎一样）：第一个词条前画虚线，每个名称前留点空，描述字号小一档。
-                if (module && Affix(row))
+                if (item.Break) Split(c, y);
+                string label = item.Label != null ? InkRich(item.Label.Label, InkSoft, false) : "";
+                switch (item.Kind)
                 {
-                    bool name = LeadSeg(row).Bold;
-                    if (!affixes && stats)
+                    case ItemKind.HeadingLine:
+                        y = GridLine(c, row != null ? InkRich(row.Label, InkSoft, false) : "", y);
+                        break;
+                    case ItemKind.ModuleAffix:
+                        if (item.Rule)
+                        {
+                            y += c.Gap;
+                            Dashes(c, left, y, c.W - c.Pad - left, 3f * c.U, 2f * c.U, c.U, PaperEdge);
+                            y += c.U + c.Gap;
+                        }
+                        else if (item.Gap) y += c.Gap * 0.5f;
+                        y += GridText(c, InkRich(row.Segs, item.Name ? Ink : InkSoft, item.Name), item.Name ? RowSize(c) : c.F * 0.8f, left, y) + RowGap(c);
+                        break;
+                    case ItemKind.Upgrade:
+                        y = UpgradeRow(c, item.Upgrade, Tint(item.Upgrade.Name, InkSoft), y);
+                        break;
+                    case ItemKind.Effects:
+                        y = Effects(c, item.Effects, label, y);
+                        break;
+                    case ItemKind.Wide:
+                        y = ModifierRow(c, row, y);
+                        break;
+                    case ItemKind.Genes:
+                        y = Genes(c, bl, item.Rows, item.Genes, y);
+                        break;
+                    case ItemKind.Pair:
+                        y = GridPair(c, row, item.Reading, strip, y, NumColsOf(c, bl));
+                        break;
+                    case ItemKind.Pipes:
+                        for (int k = 0; k < item.Parts.Count; k++) y = GridPair(c, item.Parts[k], null, false, y, null);
+                        break;
+                    case ItemKind.Cells:
+                        if (item.Rule)
+                        {
+                            y += c.Gap * 0.5f;
+                            Dashes(c, left, y, c.W - c.Pad - left, 3f * c.U, 2f * c.U, c.U, PaperEdge);
+                            y += c.U + c.Gap * 0.5f;
+                        }
+                        y = GridCells(c, row, tab, left, y, nums, liquid);
+                        break;
+                    case ItemKind.WeaponAffix:
                     {
-                        y += c.Gap;
-                        Dashes(c, left, y, c.W - c.Pad - left, 3f * c.U, 2f * c.U, c.U, PaperEdge);
-                        y += c.U + c.Gap;
+                        // 上面有小标题时，有标签列就写在这一行的标签列里，没有就单独占一行。
+                        float top = y;
+                        bool head = item.Label != null;
+                        if (head && !labelled) top = y = GridLine(c, label, y);
+                        y = WeaponAffix(c, row, item.Negative, labelled ? ValueX(c) : left, y);
+                        if (head && labelled) y = Mathf.Max(y, top + GridLabel(c, label, top) + RowGap(c));
+                        break;
                     }
-                    else if (affixes && name) y += c.Gap * 0.5f;
-                    affixes = true;
-                    float size = name ? RowSize(c) : c.F * 0.8f;
-                    y += GridText(c, InkRich(row.Segs, name ? Ink : InkSoft, name), size, left, y) + RowGap(c);
-                    continue;
+                    default:
+                        y = GridRow(c, row, label, item.AtValue ? ValueX(c) : left, y);
+                        break;
                 }
-                if (row.Heading)
-                {
-                    if (module && Settings.Debug != null && Settings.Debug.Value)
-                        SectionedTooltipsMod.Log(string.Format("模块节：标签列 {0:F0}px，值列 {1:F0}px，小标题「{2}」", c.LabelCol, ValueX(c), PlainOf(row.Label).Trim()));
-                    if (pending != null) y = GridLine(c, pending, y);
-                    pending = InkRich(row.Label, InkSoft, false);
-                    headed = true;
-                    continue;
-                }
-                stats = true;
-                Upgrade u = UpgradeOf(row);
-                if (u != null)
-                {
-                    // 名字放在标签列，升级项顺着这一列读（“储藏 ▬▬▬▬ 4/4 废金属”）；上面的小标题单独一行。
-                    if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, y);
-                    pending = null;
-                    y = UpgradeRow(c, u, Tint(u.Name, InkSoft), y);
-                    continue;
-                }
-                // 只在小标题下面（“模组效果：”）：孤零零一个“+20%”只是个数字。
-                if (pending != null && module && EffectOf(row) != null)
-                {
-                    y = Effects(c, bl, ref i, pending, y);
-                    pending = "";
-                    continue;
-                }
-                if (row.IsPair)
-                {
-                    headed = false;
-                    // 有自己标签的行上面的小标题单独占一行。
-                    if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, y);
-                    pending = null;
-                    if (row.Wide) { y = ModifierRow(c, row, y); continue; }
-                    if (GeneOf(bl, row) != null) { y = Genes(c, bl, ref i, y); continue; }
-                    Row reading = Reading(bl, i);
-                    y = GridPair(c, row, reading, strip, y, NumColsOf(c, bl));
-                    if (reading != null) i++;
-                    continue;
-                }
-                List<Row> parts = PipeParts(row);
-                if (parts != null)
-                {
-                    for (int k = 0; k < parts.Count; k++) y = GridPair(c, parts[k], null, false, y, null);
-                    continue;
-                }
-                if (row.Cells != null && tab != null)
-                {
-                    // 制表位行自己按列落位，不参与标签列。
-                    if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, y);
-                    pending = null;
-                    // 液体里带条的成分表下面紧接着物品详情的成分表：中间一道虚线，读得出是两张表。
-                    if (liquid && i > 0 && !ruled)
-                    {
-                        ruled = true;
-                        y += c.Gap * 0.5f;
-                        Dashes(c, left, y, c.W - c.Pad - left, 3f * c.U, 2f * c.U, c.U, PaperEdge);
-                        y += c.U + c.Gap * 0.5f;
-                    }
-                    y = GridCells(c, row, tab, left, y, nums, liquid);
-                    continue;
-                }
-                bool negative;
-                if (bl.Key == Sections.Weapon && AffixSign(row, out negative))
-                {
-                    // 枪械词条：正号垫浅绿、负号垫浅红，一眼分得出哪条是好的。
-                    // 上面有小标题时，有标签列就写在这一行的标签列里，没有就单独占一行。
-                    float top = y;
-                    bool head = !string.IsNullOrEmpty(pending);
-                    if (head && !labelled) top = y = GridLine(c, pending, y);
-                    y = WeaponAffix(c, row, negative, labelled ? ValueX(c) : left, y);
-                    if (head && labelled) y = Mathf.Max(y, top + GridLabel(c, pending, top) + RowGap(c));
-                    if (pending != null) pending = "";
-                    continue;
-                }
-                // 带进度条的行跟着上面那条条的起点走（和数值列对齐）；其余的从标签列起，
-                // 免得“（另 3 项低于显示阈值）”这种说明缩到数值列去。
-                // 小标题（“模组效果：”）管着的那几行例外：标签占着标签列，行也从标签列起就会叠在一起，
-                // 整组都从数值列起。
-                // 进度条总是从数值列起（这一节只有一条没标签的条时也是，比如空量筒的“▬ 0 ml / 100 ml”），和别的节的条对齐；宽度也是按数值列算的。
-                float rowX = BarOf(row.Segs) != null || (labelled && headed) ? ValueX(c) : left;
-                y = GridRow(c, row, pending ?? "", rowX, y);
-                if (pending != null) pending = "";
             }
-            if (!string.IsNullOrEmpty(pending)) y = GridLine(c, pending, y);
+            if (plan.TrailingBreak) Split(c, y);
             return y;
-        }
-
-        /// 这一节里有没有标签；纯文字的节占满整宽。
-        private static bool Labelled(Block bl)
-        {
-            for (int i = 0; i < bl.Rows.Count; i++) if (bl.Rows[i].IsPair || bl.Rows[i].Heading) return true;
-            return false;
         }
 
         /// 单独占一行的小标题（下面的行有自己的标签）。数值列空着，所以不挤在标签列里，
@@ -373,16 +309,6 @@ namespace SectionedTooltips
         {
             float h = Mathf.Max(LineH(c), GridText(c, label, RowSize(c), LabelX(c), y));
             return y + h + RowGap(c);
-        }
-
-        /// 这个小标题会单独占一行：后面是有自己标签的行、另一个小标题，或者它在最后。
-        /// 这样的小标题不用撑宽标签列。模组效果例外：Section 把它画在标签列里，后面的效果行（“质量 +6%”拆出的行也算）排在数值列。
-        private static bool AloneHeading(Block bl, int i)
-        {
-            if (i + 1 >= bl.Rows.Count) return true;
-            Row next = bl.Rows[i + 1];
-            if (bl.Key == Sections.Module && !next.Heading && UpgradeOf(next) == null && EffectOf(next) != null) return false;
-            return next.Heading || next.IsPair;
         }
 
         /// 名字靠左，百分比右对齐到单子右边；名字太长就在数值左边折行。
@@ -500,7 +426,7 @@ namespace SectionedTooltips
                     List<List<Seg>> cells = bl.Rows[i].Cells;
                     if (cells == null || cells.Count < 2) continue;
                     bool numbers = true;
-                    for (int k = 1; k < cells.Count; k++) if (!TextRules.StartsWithNumber(PlainOf(cells[k]).Trim())) numbers = false;
+                    for (int k = 1; k < cells.Count; k++) if (!TextRules.StartsWithNumber(TextUnits.Plain(cells[k]).Trim())) numbers = false;
                     if (!numbers) continue;
                     for (int k = 1; k < cells.Count; k++)
                     {
@@ -532,7 +458,7 @@ namespace SectionedTooltips
         {
             int n = row.Cells.Count;
             if (n < 2) return false;
-            for (int k = 1; k < n; k++) if (!TextRules.StartsWithNumber(PlainOf(row.Cells[k]).Trim())) return false;
+            for (int k = 1; k < n; k++) if (!TextRules.StartsWithNumber(TextUnits.Plain(row.Cells[k]).Trim())) return false;
             return x + c.Measure(CellRich(row.Cells[0], true), RowSize(c)) + c.Gap <= ValueX(c) + BarW(c) + c.Gap;
         }
 
@@ -593,13 +519,12 @@ namespace SectionedTooltips
         private static string PairValue(List<Seg> value, Row reading)
         {
             string text = ValueRich(value);
-            if (reading != null) text = Tint(PlainOf(reading.Segs).Trim(), Ink) + "  " + text;
+            if (reading != null) text = Tint(TextUnits.Plain(reading.Segs).Trim(), Ink) + "  " + text;
             return text;
         }
 
-        private static float GridPairWidth(Ctx c, Block bl, int i, bool strip)
+        private static float GridPairWidth(Ctx c, Block bl, Row row, Row reading, bool strip)
         {
-            Row row = bl.Rows[i], reading = Reading(bl, i);
             string note;
             PairLabel(c, row, strip, out note);
             List<Seg> value = row.Value;
@@ -610,19 +535,6 @@ namespace SectionedTooltips
             float w = (bar != null ? BarW(c) + c.Gap : 0f) + c.Measure(PairValue(value, reading), RowSize(c));
             if (note.Length > 0) w += 2f * c.Gap + c.Measure(Small(note, InkSoft), RowSize(c));
             return w;
-        }
-
-        /// 第 i 对下面那行只是进度条加读数时（“状态：生长中”下面是“▬ 10/28”），返回它：两件东西是一件事，合成一行。否则返回 null。
-        private static Row Reading(Block bl, int i)
-        {
-            Row row = bl.Rows[i];
-            if (!row.IsPair || BarOf(row.Value) != null || i + 1 >= bl.Rows.Count) return null;
-            Row next = bl.Rows[i + 1];
-            if (next.IsPair || next.Heading || BarOf(next.Segs) == null) return null;
-            string t = PlainOf(next.Segs).Trim();
-            if (t.Length == 0) return null;
-            for (int k = 0; k < t.Length; k++) if (!char.IsDigit(t[k]) && " ./%".IndexOf(t[k]) < 0) return null;
-            return next;
         }
 
         /// 没有自己标签的行：从 x 开始的文字，或进度条加读数。
@@ -668,7 +580,7 @@ namespace SectionedTooltips
         /// 有进度条时，“(115/112)”外面那对括号只是原版用来和条隔开的，去掉。
         private static List<Seg> Unparen(List<Seg> segs)
         {
-            string plain = PlainOf(segs).Trim();
+            string plain = TextUnits.Plain(segs).Trim();
             float a, b;
             if (plain.Length < 5 || plain[0] != '(' || plain[plain.Length - 1] != ')'
                 || !TextRules.ParseFraction(plain.Substring(1, plain.Length - 2), out a, out b)) return segs;
@@ -691,60 +603,6 @@ namespace SectionedTooltips
         }
 
         // ---------------------------------------------------------------- 养殖的基因
-
-        /// <summary>
-        /// 养殖的一行属性：“免疫力: 28.46 (27.63 / 29.29)”。括号里是两个等位基因（开着基因扫描仪才有），
-        /// 游戏拿它们和物种的基准值比：好 5% 以上标绿、差 5% 以上标红，其余是中性色。
-        /// </summary>
-        private sealed class Gene
-        {
-            public string Value = "", A = "", B = "";
-            /// 1 好，-1 差，0 中性。
-            public int ValueTone, ToneA, ToneB;
-        }
-
-        private static Gene GeneOf(Block bl, Row row)
-        {
-            if (bl.Key != Sections.Husbandry || !row.IsPair || row.Value == null || BarOf(row.Value) != null) return null;
-            // 去掉空白段后，末尾应当是“(”、A、“/”、B、“)”五段，各自带着游戏给的颜色。
-            List<Seg> parts = new List<Seg>();
-            for (int i = 0; i < row.Value.Count; i++)
-                if (TextUnits.Plain(row.Value[i].Text).Trim().Length > 0) parts.Add(row.Value[i]);
-            int n = parts.Count;
-            if (n < 5) return null;
-            string close = Trimmed(parts[n - 1]), b = Trimmed(parts[n - 2]), slash = Trimmed(parts[n - 3]), a = Trimmed(parts[n - 4]), open = Trimmed(parts[n - 5]);
-            float f;
-            if (close != ")" || slash != "/" || !open.EndsWith("(", StringComparison.Ordinal)
-                || !TextRules.ParseNumber(a, out f) || !TextRules.ParseNumber(b, out f)) return null;
-            Gene g = new Gene();
-            StringBuilder value = new StringBuilder();
-            for (int i = 0; i < n - 5; i++) value.Append(parts[i].Text);
-            string rest = open.Substring(0, open.Length - 1).Trim();
-            if (rest.Length > 0) value.Append(' ').Append(rest);
-            g.Value = TextUnits.Plain(value.ToString()).Trim();
-            if (g.Value.Length == 0) return null;
-            g.ValueTone = Tone(parts[0].Color);
-            g.A = a;
-            g.B = b;
-            g.ToneA = Tone(parts[n - 4].Color);
-            g.ToneB = Tone(parts[n - 2].Color);
-            return g;
-        }
-
-        private static string Trimmed(Seg s) { return TextUnits.Plain(s.Text).Trim(); }
-
-        /// 游戏的颜色是好、坏还是中性：绿是好，红是坏，其余（青色、无色）中性。
-        private static int Tone(Palette p)
-        {
-            if (p == Palette.None) return 0;
-            Color c = Overlay.ToColor(p, Palette.Gray);
-            float h, s, v;
-            Color.RGBToHSV(c, out h, out s, out v);
-            if (s < 0.25f) return 0;
-            if (h > 0.17f && h < 0.45f) return 1;
-            if (h < 0.05f || h > 0.92f) return -1;
-            return 0;
-        }
 
         /// 基因表的列宽：表现值、A、B 三列各取这一节里最宽的（含表头），数字右对齐。
         private sealed class GeneCols
@@ -782,7 +640,7 @@ namespace SectionedTooltips
         }
 
         /// 从第 i 行开始的一串基因行（i 停在最后一行），上面一行小字表头。返回底部。
-        private static float Genes(Ctx c, Block bl, ref int i, float y)
+        private static float Genes(Ctx c, Block bl, List<Row> rows, List<Gene> genes, float y)
         {
             GeneCols cols = GeneColsOf(c, bl);
             float lh = LineH(c), size = RowSize(c), small = NoteSize(c), x = ValueX(c);
@@ -794,18 +652,15 @@ namespace SectionedTooltips
             hh = Mathf.Max(hh, RightText(c, SectionedTooltipsMod.L("gene_b"), small, InkSoft, cols.RightB(x), y));
             y += hh + RowGap(c);
 
-            for (; i < bl.Rows.Count; i++)
+            for (int i = 0; i < rows.Count; i++)
             {
-                Row row = bl.Rows[i];
-                Gene g = GeneOf(bl, row);
-                if (g == null) break;
-                float h = Mathf.Max(lh, GridLabel(c, InkRich(row.Label, InkSoft, false), y));
+                Gene g = genes[i];
+                float h = Mathf.Max(lh, GridLabel(c, InkRich(rows[i].Label, InkSoft, false), y));
                 h = Mathf.Max(h, RightText(c, g.Value, size, ToneInk(g.ValueTone, Ink), cols.RightValue(x), y));
                 h = Mathf.Max(h, Allele(c, g.A, g.ToneA, cols, cols.RightA(x), y, lh));
                 h = Mathf.Max(h, Allele(c, g.B, g.ToneB, cols, cols.RightB(x), y, lh));
                 y += h + RowGap(c);
             }
-            i--;
             return y;
         }
 
@@ -919,7 +774,7 @@ namespace SectionedTooltips
                     float cw = c.Measure(ValueInks(cells[k]), size);
                     int column = TabLayout.Column(k, cells.Count, count);
                     if (cw > w[column]) w[column] = cw;
-                    if (!TextRules.StartsWithNumber(PlainOf(cells[k]).Trim())) right[column] = false;
+                    if (!TextRules.StartsWithNumber(TextUnits.Plain(cells[k]).Trim())) right[column] = false;
                 }
             }
             TabLayout tab = new TabLayout(w, right, Mathf.Round(c.Gap * TabGapFactor), size);
@@ -960,19 +815,6 @@ namespace SectionedTooltips
         }
 
 
-        /// <summary>武器一节里的词条行（“+12 后坐力控制”“-6 人机工效”）：正号返回 false，负号返回 true，不是词条返回 false。</summary>
-        private static bool AffixSign(Row row, out bool negative)
-        {
-            negative = false;
-            if (row.IsPair || row.Heading || row.Segs == null) return false;
-            string s = PlainOf(row.Segs).Trim();
-            if (s.Length < 2) return false;
-            if (s[0] == '+') return s[1] == '.' || char.IsDigit(s[1]);
-            if (s[0] != '-' && s[0] != '−') return false;
-            negative = true;
-            return s[1] == '.' || char.IsDigit(s[1]);
-        }
-
         /// <summary>一条武器词条，垫一层浅绿（正）或浅红（负）的底，文字沿用数值的墨色。返回底部。</summary>
         private static float WeaponAffix(Ctx c, Row row, bool negative, float x, float y)
         {
@@ -994,65 +836,7 @@ namespace SectionedTooltips
             return y + h + RowGap(c);
         }
 
-        /// “精工扩舱 0/12 | 养殖区 12x8 | 剩余升级次数：12”拆成标签/数值行；拆不开返回 null。
-        private static List<Row> PipeParts(Row row)
-        {
-            string plain = PlainOf(row.Segs).Trim();
-            if (plain.IndexOf('|') < 0 || BarOf(row.Segs) != null) return null;
-            string[] bits = plain.Split('|');
-            if (bits.Length < 2) return null;
-            List<Row> list = new List<Row>();
-            for (int i = 0; i < bits.Length; i++)
-            {
-                string bit = bits[i].Trim();
-                if (bit.Length == 0) continue;
-                Row r = PairFromPlain(bit);
-                string name, number;
-                if (r == null && TextRules.NameNumber(bit, out name, out number)) r = PairFromPlain(name + "：" + number);
-                if (r == null) return null;
-                list.Add(r);
-            }
-            return list.Count >= 2 ? list : null;
-        }
-
         // ---------------------------------------------------------------- 升级
-
-        /// 游戏的升级行之一，“储藏（废金属）：[bar] 0/7”：名称、要什么材料、等级。
-        private sealed class Upgrade
-        {
-            public string Name = "";
-            public string Need = "";
-            public int Level;
-            public int Max;
-        }
-
-        /// 等级高于这个数就画进度条，不画格子。
-        private const int MaxPips = 12;
-
-        private static Upgrade UpgradeOf(Row row)
-        {
-            if (!row.IsPair || BarOf(row.Value) == null) return null;
-            string v = PlainOf(row.Value).Trim();
-            int slash = v.IndexOf('/');
-            int level, max;
-            if (slash <= 0
-                || !int.TryParse(v.Substring(0, slash).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out level)
-                || !int.TryParse(v.Substring(slash + 1).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out max)
-                || max <= 0 || level < 0 || level > max) return null;
-            string label = PlainOf(row.Label).Trim();
-            int open = TextRules.TrailingGroup(label);
-            Upgrade u = new Upgrade();
-            u.Level = level;
-            u.Max = max;
-            if (open > 0)
-            {
-                u.Name = label.Substring(0, open).Trim();
-                u.Need = label.Substring(open + 1, label.Length - open - 2).Trim();
-            }
-            // 没有材料说明时，只有数量小到能用格子表示（“储物标签页 1/5”）才算：“10/28”天的生长是进度条。
-            else if (max <= MaxPips) u.Name = label;
-            return u.Name.Length > 0 ? u : null;
-        }
 
         private static string LevelText(Upgrade u)
         {
@@ -1157,65 +941,6 @@ namespace SectionedTooltips
 
         // ---------------------------------------------------------------- 模组效果
 
-        /// 一条模组效果行，“-质量: +6% (系数 0.5) (+94%后可产出纯水)”：彩色标签和后面的内容。
-        private sealed class Effect
-        {
-            public string Name = "";
-            public string Percent = "";
-            public bool Negative;
-            /// 它做什么（“-2能量/天”）。
-            public string Main = "";
-            /// 补充说明。
-            public readonly List<string> Notes = new List<string>();
-        }
-
-        private static Effect EffectOf(Row row)
-        {
-            if (!row.IsPair || BarOf(row.Value) != null) return null;
-            string v = PlainOf(row.Value).Trim();
-            if (v.Length < 3 || (v[0] != '+' && v[0] != '-' && v[0] != '−')) return null;
-            int i = 1;
-            while (i < v.Length && (char.IsDigit(v[i]) || v[i] == '.')) i++;
-            if (i == 1 || i >= v.Length || v[i] != '%') return null;
-            Effect e = new Effect();
-            e.Name = PlainOf(row.Label).Trim().TrimStart('-', '−').Trim();
-            if (e.Name.Length == 0) return null;
-            e.Percent = v.Substring(0, i + 1);
-            e.Negative = v[0] != '+';
-            string rest = v.Substring(i + 1).Trim();
-            List<string> groups = Groups(rest);
-            if (groups == null) e.Main = rest;
-            else
-                for (int k = 0; k < groups.Count; k++)
-                {
-                    if (k == 0) e.Main = groups[k];
-                    else e.Notes.Add(groups[k]);
-                }
-            return e;
-        }
-
-        /// “(a) (b)” 拆成 a、b；括号外面还有别的东西时返回 null。
-        private static List<string> Groups(string s)
-        {
-            List<string> list = new List<string>();
-            int i = 0;
-            while (i < s.Length)
-            {
-                if (char.IsWhiteSpace(s[i])) { i++; continue; }
-                if (s[i] != '(' && s[i] != '（') return null;
-                int depth = 0, start = i;
-                for (; i < s.Length; i++)
-                {
-                    if (s[i] == '(' || s[i] == '（') depth++;
-                    else if ((s[i] == ')' || s[i] == '）') && --depth == 0) break;
-                }
-                if (i >= s.Length) return null;
-                list.Add(s.Substring(start + 1, i - start - 1).Trim());
-                i++;
-            }
-            return list;
-        }
-
         // 游戏给模组效果用的颜色，按游戏各语言里的效果名判断。
         private static readonly Color32 EfficiencyHue = new Color32(76, 140, 52, 255);
         private static readonly Color32 PerformanceHue = new Color32(128, 88, 176, 255);
@@ -1280,17 +1005,8 @@ namespace SectionedTooltips
         }
 
         /// 从第 i 行开始的一串效果行（i 停在最后一行），放在数值列里，用它上面那行小标题当标签。自己能说清的标签（“性能 -22%”）排在同一行；后面还有内容的，一个一行，内容对齐到最宽标签之后。
-        private static float Effects(Ctx c, Block bl, ref int i, string label, float y)
+        private static float Effects(Ctx c, List<Effect> run, string label, float y)
         {
-            List<Effect> run = new List<Effect>();
-            int j = i;
-            for (; j < bl.Rows.Count; j++)
-            {
-                Effect e = EffectOf(bl.Rows[j]);
-                if (e == null) break;
-                run.Add(e);
-            }
-            i = j - 1;
             float lh = LineH(c), left = ValueX(c), right = c.W - c.Pad;
             float h = Mathf.Max(lh, GridLabel(c, label, y));
             bool bare = true;
@@ -1436,30 +1152,29 @@ namespace SectionedTooltips
             for (int i = 0; i < r.Blocks.Count; i++)
             {
                 if (!OnSlip(r.Blocks[i].Key)) continue;
-                // 和 Section 画的顺序一致，小标题后面跟的是哪一行才算得准。
-                Block bl = StatusFirst(r.Blocks[i]);
-                bool strip = StripsBrackets(c, bl), module = bl.Key == Sections.Module;
-                for (int j = 0; j < bl.Rows.Count; j++)
+                SectionPlan plan = PlanOf(c, r.Blocks[i]);
+                bool strip = StripsBrackets(c, plan.Block);
+                for (int j = 0; j < plan.Items.Count; j++)
                 {
-                    Row row = bl.Rows[j];
-                    if (row.Heading)
+                    PlanItem item = plan.Items[j];
+                    string note;
+                    // 借来的小标题写在标签列里；单独占一行的（HeadingLine）不用撑宽标签列。
+                    if (item.Label != null && (item.Kind != ItemKind.WeaponAffix || plan.Labelled))
+                        w = Mathf.Max(w, c.Measure(InkRich(item.Label.Label, InkSoft, false), size));
+                    switch (item.Kind)
                     {
-                        if (!AloneHeading(bl, j)) w = Mathf.Max(w, c.Measure(InkRich(row.Label, InkSoft, false), size));
-                    }
-                    else if (row.IsPair)
-                    {
-                        if (row.Wide) continue;
-                        Upgrade u = UpgradeOf(row);
-                        string note;
-                        if (u != null) w = Mathf.Max(w, c.Measure(u.Name, size));
-                        else if (GeneOf(bl, row) != null) w = Mathf.Max(w, c.Measure(InkRich(row.Label, InkSoft, false), size));
-                        else w = Mathf.Max(w, c.Measure(PairLabel(c, row, strip, out note), size));
-                    }
-                    else
-                    {
-                        List<Row> parts = PipeParts(row);
-                        string note;
-                        if (parts != null) for (int k = 0; k < parts.Count; k++) w = Mathf.Max(w, c.Measure(PairLabel(c, parts[k], false, out note), size));
+                        case ItemKind.Upgrade:
+                            w = Mathf.Max(w, c.Measure(item.Upgrade.Name, size));
+                            break;
+                        case ItemKind.Genes:
+                            for (int k = 0; k < item.Rows.Count; k++) w = Mathf.Max(w, c.Measure(InkRich(item.Rows[k].Label, InkSoft, false), size));
+                            break;
+                        case ItemKind.Pair:
+                            w = Mathf.Max(w, c.Measure(PairLabel(c, item.Row, strip, out note), size));
+                            break;
+                        case ItemKind.Pipes:
+                            for (int k = 0; k < item.Parts.Count; k++) w = Mathf.Max(w, c.Measure(PairLabel(c, item.Parts[k], false, out note), size));
+                            break;
                     }
                 }
             }
@@ -1474,52 +1189,55 @@ namespace SectionedTooltips
             float value = 0f, size = RowSize(c), tabs = 0f;
             for (int i = 0; i < r.Blocks.Count; i++)
             {
-                Block bl = r.Blocks[i];
-                if (!OnSlip(bl.Key)) continue;
-                bool labelled = Labelled(bl), module = bl.Key == Sections.Module, strip = StripsBrackets(c, bl);
-                // 效果的文字从这一串里最宽的标签之后开始，不是从自己那个标签后面。
-                float chip = 0f, said = 0f;
-                GeneCols genes = null;
-                for (int j = 0; j < bl.Rows.Count; j++)
+                if (!OnSlip(r.Blocks[i].Key)) continue;
+                SectionPlan plan = PlanOf(c, r.Blocks[i]);
+                Block bl = plan.Block;
+                bool strip = StripsBrackets(c, bl);
+                for (int j = 0; j < plan.Items.Count; j++)
                 {
-                    Row row = bl.Rows[j];
-                    if (row.Heading) continue;
-                    if (row.Wide)
+                    PlanItem item = plan.Items[j];
+                    Row row = item.Row;
+                    switch (item.Kind)
                     {
-                        value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft, false), size)
-                            + c.Gap + c.Measure(InkRich(row.Value, Ink), size));
-                        continue;
+                        case ItemKind.Wide:
+                            value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft, false), size)
+                                + c.Gap + c.Measure(InkRich(row.Value, Ink), size));
+                            break;
+                        case ItemKind.Upgrade:
+                            value = Mathf.Max(value, UpgradeWidth(c, item.Upgrade));
+                            break;
+                        case ItemKind.Effects:
+                        {
+                            // 效果的文字从这一串里最宽的标签之后开始，不是从自己那个标签后面。
+                            float chip = 0f, said = 0f;
+                            for (int k = 0; k < item.Effects.Count; k++)
+                            {
+                                chip = Mathf.Max(chip, EffectChipWidth(c, item.Effects[k]));
+                                string text = EffectText(item.Effects[k]);
+                                if (text.Length > 0) said = Mathf.Max(said, c.Measure(text, size));
+                            }
+                            value = Mathf.Max(value, said > 0f ? chip + c.Gap + said : chip);
+                            break;
+                        }
+                        case ItemKind.Genes:
+                            value = Mathf.Max(value, GeneColsOf(c, bl).Width);
+                            break;
+                        case ItemKind.Pair:
+                            value = Mathf.Max(value, GridPairWidth(c, bl, row, item.Reading, strip));
+                            break;
+                        case ItemKind.Pipes:
+                            if (plan.Labelled) for (int k = 0; k < item.Parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(item.Parts[k].Value), size));
+                            break;
+                        case ItemKind.WeaponAffix:
+                        case ItemKind.Text:
+                            // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
+                            // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
+                            // 否则单子不够宽，中文会在字中间断成两行。纯文字的节里长句照旧折行，不撑宽单子。
+                            if (plan.Labelled || BarOf(row.Segs) != null) value = Mathf.Max(value, GridRowWidth(c, row));
+                            break;
+                        // 单独一行的小标题和模组词条会折行；制表位行按整表宽度算，见下面的 tab。
                     }
-                    if (!row.IsPair)
-                    {
-                        // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
-                        if (row.Cells != null) continue; // 制表位行按整表宽度算，见下面的 tab
-                        if ((module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
-                        // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
-                        // 否则单子不够宽，中文会在字中间断成两行。长句照旧折行，不撑宽单子。
-                        if (!labelled && BarOf(row.Segs) == null) continue;
-                        List<Row> parts = PipeParts(row);
-                        if (parts != null) for (int k = 0; k < parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(parts[k].Value), size));
-                        else value = Mathf.Max(value, GridRowWidth(c, row));
-                        continue;
-                    }
-                    Upgrade u = UpgradeOf(row);
-                    Effect e = u == null ? EffectOf(row) : null;
-                    if (u != null) value = Mathf.Max(value, UpgradeWidth(c, u));
-                    else if (e != null)
-                    {
-                        chip = Mathf.Max(chip, EffectChipWidth(c, e));
-                        string text = EffectText(e);
-                        if (text.Length > 0) said = Mathf.Max(said, c.Measure(text, size));
-                    }
-                    else if (GeneOf(bl, row) != null)
-                    {
-                        if (genes == null) genes = GeneColsOf(c, bl);
-                        value = Mathf.Max(value, genes.Width);
-                    }
-                    else value = Mathf.Max(value, GridPairWidth(c, bl, j, strip));
                 }
-                if (chip > 0f) value = Mathf.Max(value, said > 0f ? chip + c.Gap + said : chip);
                 TabLayout tab = TabLayoutOf(c, bl);
                 if (tab != null && tab.Width > tabs) tabs = tab.Width;
             }

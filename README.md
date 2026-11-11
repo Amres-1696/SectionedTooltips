@@ -41,28 +41,42 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 | 路径 | 内容 |
 |---|---|
+| `src/Patches.cs` | 全部固定的 Harmony 补丁，按一帧里的先后排 |
 | `src/Capture.cs` | 记 `GetTooltipBasic` 期间各 helper 写过的 slice 区间 |
 | `src/Helpers.cs` | 90 多个 tooltip helper 的 patch 表，按调用顺序编号 |
-| `src/Layout.cs` | 分节、拆标签/数值、画 Classic 风格、缓存 |
-| `src/Ticket.cs` | 估价单的纸、印章、标题、价格、页脚、文字上色 |
+| `src/Layout.cs` | 排版的流程：读 builder、每行归到某一节、筛选、缓存 |
+| `src/LayoutModel.cs` | 排版的数据：文字段、行、块、排版结果，不引用游戏程序集 |
+| `src/LayoutRows.cs` | 把行并成块、拆成标签/数值/表格；设置从参数进来，可以离线跑 |
+| `src/LayoutClassic.cs` | Classic 风格的文字输出 |
+| `src/Ticket.cs` | 估价单的宿主：显示、隐藏、定位，已建单子的缓存 |
+| `src/TicketBuild.cs` | 建一张单子：构建上下文、把各部分拼成卡片、单子宽度、太高时分栏 |
+| `src/TicketHeader.cs` | 单子上半张：名称、大字价格、价格明细、印章 |
+| `src/TicketTags.cs` | 名字下面的分类标签和它们的颜色 |
+| `src/TicketBody.cs` | 小节以外的部件：图标、内容物格子、描述、页脚 |
+| `src/TicketInk.cs` | 纸色和墨色，带颜色的文字怎么写到纸上 |
+| `src/TicketLog.cs` | 调试：构建耗时、把建好的单子写进日志 |
 | `src/TicketGrid.cs` | 估价单的小节网格：标签列、数值列、进度条、升级、模组效果 |
+| `src/TicketPlan.cs` | 估价单一节的“定型”：每行是升级、效果、基因、词条还是普通的一对，只判一次，画的时候按类型分支 |
 | `src/Contents.cs` | 容器和机器里装了什么、电池和液体的量条 |
 | `src/Panels.cs` | Classic 风格的侧边面板（液位计、内容物格子） |
 | `src/Overlay.cs` | 画在 tooltip 上的图标和进度条 |
 | `src/Icons.cs` | 物品图标的副本：裁掉透明边，按方框大小放大 |
 | `src/SettingsPanel.cs` | 设置面板补丁：滑块数值、色块、示例单 |
 | `src/TicketSample.cs` | 示例单和 Classic 示例 |
+| `src/Compat.cs` | 和其他模组兼容的统一入口：核心流程只调它的钩子，每个兼容件各有熔断 |
 | `src/ItemDetailsBridge.cs` | 和 Item Details 的对接：排版声明、tooltip 锚点 |
-| `src/ItemDetailsSections.cs` | 读 Item Details 的区块协议，把它的行归到对应小节 |
+| `src/ItemDetailsSections.cs` | 读 Item Details 的区块协议，把它的行归到对应小节（区块 id 到小节的映射也在这里） |
 | `src/AquaSense.cs` | 读《更好的水商操作体验》的成分接口，把它的成分行画成进度条 |
 | `src/ReadableFonts.cs` | 和《字体大小优化》的兼容：它开着时估价单自己放大，字号抬到它不改的范围 |
 | `src/Expand.cs` | 平时收起、按住展开键看完整估价单 |
+| `src/Dev.cs` | dev 工具接进正式流程的唯一入口；普通构建里是空的 |
 | `src/DumpAll.cs` | dev 构建：导出全部物品的分节结果（`dumpall.flag`） |
-| `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`） |
+| `src/RowCorpus.cs` | dev 构建和离线测试：并块拆列的回放语料（`rows-*.txt`）的读写 |
+| `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`）；状态样本和每一种物品也能各建一张（`samples.flag`、`slips.flag`） |
 | `src/Shots.cs` | dev 构建：把显示过的估价单截图存进模组数据目录（`shots.flag`） |
 | `src/TextRules.cs` | 纯文本规则（分数、模板、括号、清单），不引用游戏程序集 |
 | `src/Fuse.cs` | 连续失败熔断 |
-| `tests/` | 无头自检：`tests\test.bat` |
+| `tests/` | 无头自检：`tests\test.bat`。`tests\corpus\` 里有回放语料时（dev 构建导出、`tests\accept.bat` 收进来，不进仓库）还会把每件物品的并块拆列重跑一遍对比 |
 | `Localization/*.csv` | 文案，目前中英两份 |
 
 `workshop/`（发布素材）、`build.bat`（本地构建脚本）和 `manifest.dev.xml`（dev 构建的清单）不进仓库。

@@ -21,9 +21,8 @@ namespace SectionedTooltips
 
             ready = SliceAccess.Init();
             if (!ready) Error("RichTextBuilder internals not found; tooltips stay vanilla.");
-            // 把排版声明和 tooltip 锚点交给 Item Details（没装它也没关系，只是没人读）。
-            if (ready) ItemDetailsBridge.Register();
-            if (ready) ItemDetailsSections.Register();
+            // 向其他模组声明我们（没装它们也没关系，只是没人读）。
+            if (ready) Compat.Register();
         }
 
         private static bool ready;
@@ -52,10 +51,7 @@ namespace SectionedTooltips
 
         public void OnDisable()
         {
-            try { ItemDetailsSections.Unregister(); }
-            catch (Exception e) { Error("unregistering section watch failed: " + e.Message); }
-            try { ItemDetailsBridge.Unregister(); }
-            catch (Exception e) { Error("unregistering from Item Details failed: " + e.Message); }
+            Compat.Unregister();
             // 之后加载器会立刻卸载我们的 patch，所以现在不隐藏的话，估价单不会消失，淡出的原版窗口也回不来。
             try { Overlay.Hide(); }
             catch (Exception e) { Error("hiding on disable failed: " + e.Message); }
@@ -106,6 +102,8 @@ namespace SectionedTooltips
         internal static ConfigEntry<bool> CollapseContents;
         internal static ConfigEntry<bool> CollapseDescription;
         internal static ConfigEntry<bool> CollapseModInfo;
+        internal static ConfigEntry<bool> CollapsePriceFactors;
+        internal static ConfigEntry<bool> ShowOnKey;
         /// 每个 Ticket.TagGroups 条目一个颜色设置。
         internal static ConfigEntry<string>[] TagColors;
         internal static ConfigEntry<bool> Debug;
@@ -183,6 +181,8 @@ namespace SectionedTooltips
             CollapseContents = cfg.Define("CollapseContents", true, fold, Text("cfg_collapse_contents"), Text("cfg_collapse_contents_tip"), false);
             CollapseDescription = cfg.Define("CollapseDescription", true, fold, Text("cfg_collapse_desc"), Text("cfg_collapse_desc_tip"), false);
             CollapseModInfo = cfg.Define("CollapseModInfo", false, fold, Text("cfg_collapse_mods"), Text("cfg_collapse_mods_tip"), false);
+            CollapsePriceFactors = cfg.Define("CollapsePriceFactors", false, fold, Text("cfg_collapse_factors"), Text("cfg_collapse_factors_tip"), false);
+            ShowOnKey = cfg.Define("ShowOnKey", false, fold, Text("cfg_show_on_key"), Text("cfg_show_on_key_tip"), false);
             // 估价单的分类标签：底色的开关，以及每组一个颜色。
             TagBackground = cfg.Define("TagBackground", true, tags, Text("cfg_tag_bg"), Text("cfg_tag_bg_tip"), false);
             TagColors = new ConfigEntry<string>[Ticket.TagGroups.Length];
@@ -223,6 +223,7 @@ namespace SectionedTooltips
             CollapseContents.OnChanged += delegate { Version++; };
             CollapseDescription.OnChanged += delegate { Version++; };
             CollapseModInfo.OnChanged += delegate { Version++; };
+            CollapsePriceFactors.OnChanged += delegate { Version++; };
             for (int i = 0; i < TagColors.Length; i++) TagColors[i].OnChanged += delegate { Version++; };
 
             Enabled.OnChanged += delegate { Version++; };

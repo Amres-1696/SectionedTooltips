@@ -115,9 +115,14 @@ cfg_collapse_desc,收起物品描述
 cfg_collapse_desc_tip,物品自带的介绍文字。
 cfg_collapse_mods,收起附加信息
 cfg_collapse_mods_tip,其他模组加的「附加信息」一节和模组来源。
+cfg_collapse_factors,收起价格影响因素
+cfg_collapse_factors_tip,附加信息里带正负百分比的那几行（市场事件、黑市溢价等），按住展开键才显示；附加信息的其他行照常显示。已经勾了「收起附加信息」时不用再勾这项。
+cfg_show_on_key,按住展开键才显示物品详情
+cfg_show_on_key_tip,平时鼠标划过物品不弹出物品详情，按住展开键才显示（显示的是完整的估价单）。两种外观都适用。
 fold_view,查看{0}
 fold_sep,、
 fold_prices,价格明细
 fold_contents,内容物
 fold_desc,描述
 fold_mods,附加信息
+fold_factors,价格影响因素

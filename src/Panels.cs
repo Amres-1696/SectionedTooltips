@@ -145,22 +145,34 @@ namespace SectionedTooltips
             return m;
         }
 
-        /// 窗口下最大的可见图片（文字以外）：tooltip 的可见方框。
+        /// tooltip 的可见方框：窗口下包住正文中心的最大可见图片（文字和我们自己的东西以外）。
+        /// 其他模组挂进窗口的大图（比如自己画的一整块面板）不包住正文，不会被当成方框；一张都不包住时才退回最大的那张。
         internal static RectTransform FindBox(RectTransform win, TMP_Text tmp)
         {
-            RectTransform best = null;
-            float bestArea = 0f;
+            RectTransform best = null, around = null;
+            float bestArea = 0f, aroundArea = 0f;
+            Vector3 center = tmp.rectTransform.TransformPoint(tmp.rectTransform.rect.center);
             Image[] images = win.GetComponentsInChildren<Image>(false);
             for (int i = 0; i < images.Length; i++)
             {
                 Image img = images[i];
-                if (img == null || !img.enabled || img.transform.IsChildOf(tmp.transform)) continue;
-                Rect r = img.rectTransform.rect;
-                Vector3 s = img.rectTransform.lossyScale;
+                if (img == null || !img.enabled || img.transform.IsChildOf(tmp.transform) || Ours(img.transform, win)) continue;
+                RectTransform rt = img.rectTransform;
+                Rect r = rt.rect;
+                Vector3 s = rt.lossyScale;
                 float area = Mathf.Abs(r.width * s.x * r.height * s.y);
-                if (area > bestArea) { bestArea = area; best = img.rectTransform; }
+                if (area > bestArea) { bestArea = area; best = rt; }
+                if (area > aroundArea && r.Contains(rt.InverseTransformPoint(center))) { aroundArea = area; around = rt; }
             }
-            return best;
+            return around ?? best;
+        }
+
+        /// 是我们自己挂在窗口下的东西（名字都以 SectionedTooltips 开头）。
+        private static bool Ours(Transform t, Transform win)
+        {
+            for (; t != null && t != win; t = t.parent)
+                if (t.name.StartsWith("SectionedTooltips", StringComparison.Ordinal)) return true;
+            return false;
         }
 
         /// 窗口的边框图片（覆盖方框大半、在文字以外），连同各自的内缩。
@@ -313,7 +325,7 @@ namespace SectionedTooltips
                     continue;
                 }
 
-                Sprite icon = Overlay.IconOf(entries[i].Item);
+                Sprite icon = Icons.IconOf(entries[i].Item);
                 if (icon != null)
                 {
                     float iw, ih;

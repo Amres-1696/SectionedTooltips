@@ -14,19 +14,6 @@ namespace SectionedTooltips
         public int End;
     }
 
-    /// slice 区间 [Start, End) 是一条进度条（AddProgressBar 画的）。
-    internal sealed class BarMark
-    {
-        public int Start;
-        public int End;
-        public float Ratio;
-        public RenderHandler.ColorPalette Color;
-        public RenderHandler.ColorPalette Background;
-        /// 其他模组按 RGB 给的条色（AquaSense 的成分条）；有它时不看 Color。
-        public bool HasRgb;
-        public UnityEngine.Color32 Rgb;
-    }
-
     /// 一次 GetTooltipBasic 调用期间的状态，helper 运行时往里记。
     internal sealed class Frame
     {
@@ -131,92 +118,6 @@ namespace SectionedTooltips
             m.Start = f.CurStart;
             m.End = f.Slices.Count;
             f.Marks.Add(m);
-        }
-    }
-
-    [HarmonyPatch(typeof(RichTextBuilder), "AddProgressBar")]
-    internal static class ProgressBarPatch
-    {
-        private static void Prefix(RichTextBuilder __instance, out int __state)
-        {
-            __state = Capture.BarStart(__instance);
-        }
-
-        private static void Postfix(RichTextBuilder __instance, float ratio, RenderHandler.ColorPalette color, RenderHandler.ColorPalette backgroundColor, int __state)
-        {
-            Capture.BarEnd(__instance, __state, ratio, color, backgroundColor);
-        }
-    }
-
-    [HarmonyPatch(typeof(GameItemElement), "GetTooltipBasic")]
-    internal static class TooltipBasicPatch
-    {
-        private static GameItemElement checkedItem;
-
-        /// 调试用：从我们的 prefix（最先）到 postfix（最后），即游戏和其他模组的耗时。
-        internal static readonly System.Diagnostics.Stopwatch BasicTimer = new System.Diagnostics.Stopwatch();
-        internal static double BasicMs;
-
-        [HarmonyPriority(Priority.First)]
-        private static void Prefix(GameItemElement __instance)
-        {
-            if (Capture.Depth == 0 && Settings.Debug != null && Settings.Debug.Value)
-            {
-                BasicTimer.Reset();
-                BasicTimer.Start();
-            }
-            SectionedTooltipsMod.EnsureHelpers();
-            // 在 helper 运行前修好语言，这样模组 helper 写出的就是对的；每个新物品只做一次。
-            if (!ReferenceEquals(__instance, checkedItem))
-            {
-                checkedItem = __instance;
-                Relocalize.Check();
-            }
-            Capture.Push(__instance);
-        }
-
-        // 排在最后，其他模组 postfix 加的文本也能一起排版。
-        [HarmonyPriority(Priority.Last)]
-        private static void Postfix(GameItemElement __instance, RichTextBuilder __result)
-        {
-#if DEVDUMP
-            if (DumpAll.Running && __result != null)
-            {
-                // 全量导出：每件物品自己调 GetTooltipBasic，这里只算分节、写文件
-                try { Layout.Apply(Capture.Top, __result); }
-                catch (Exception e) { Fuse.Fail(Fuse.LayoutKey, e); }
-                return;
-            }
-#endif
-            if (__result == null || Capture.Depth != 1) return;
-            if (Settings.Enabled != null && !Settings.Enabled.Value) return;
-            if (Fuse.IsOpen(Fuse.LayoutKey)) return;
-            bool timing = BasicTimer.IsRunning;
-            if (timing)
-            {
-                BasicTimer.Stop();
-                BasicMs = BasicTimer.Elapsed.TotalMilliseconds;
-            }
-#if DEVDUMP
-            try { DumpAll.Check(); } catch { }
-#endif
-            try
-            {
-                Layout.Apply(Capture.Top, __result);
-                if (timing) Layout.LogSlowFrame(__instance, BasicMs);
-                Fuse.Ok(Fuse.LayoutKey);
-            }
-            catch (Exception e)
-            {
-                // 连续失败到上限就不再排版，工具提示退回原版。
-                Fuse.Fail(Fuse.LayoutKey, e);
-            }
-        }
-
-        private static Exception Finalizer(Exception __exception)
-        {
-            Capture.Pop();
-            return __exception;
         }
     }
 }

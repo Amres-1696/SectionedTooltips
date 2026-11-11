@@ -50,11 +50,13 @@ namespace SectionedTooltips
         internal static bool Enabled { get { return Settings.On(Settings.Collapse); } }
 
         /// 现在要显示完整的单子吗：收起功能关着，或者展开键按着。
-        internal static bool Full
+        internal static bool Full { get { return !Enabled || KeyHeld; } }
+
+        /// 展开键现在按着吗。
+        internal static bool KeyHeld
         {
             get
             {
-                if (!Enabled) return true;
                 KeyCode[] keys = Codes[Index];
                 try
                 {
@@ -63,6 +65,12 @@ namespace SectionedTooltips
                 catch { }
                 return false;
             }
+        }
+
+        /// 平时不弹物品详情、按住展开键才显示（设置里开了才这样），而现在键没按着。
+        internal static bool Concealed
+        {
+            get { return Settings.ShowOnKey != null && Settings.ShowOnKey.Value && Settings.On(Settings.Enabled) && !KeyHeld; }
         }
 
         internal static string Cap { get { return Caps[Index]; } }

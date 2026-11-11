@@ -33,19 +33,6 @@ namespace SectionedTooltips
         private static FieldInfo fTooltipElement;
         private static bool reported;
 
-        internal static Sprite IconOf(GameItem item)
-        {
-            GameItemElement e = item as GameItemElement;
-            if (e == null) return null;
-            try
-            {
-                TreeNodeRender bg = e.background;
-                if (bg == null || bg.image == null) return null;
-                return bg.image.sprite;
-            }
-            catch { return null; }
-        }
-
         /// 游戏是否用物品自己的 tooltip（比如背包里的人物卡）顶掉基础 tooltip：那时显示的文字不是排版用的那份，就不动它。
         private static bool Replaced(GameItemElement item)
         {
@@ -178,7 +165,7 @@ namespace SectionedTooltips
 
             if (r.IconLine >= 0 && Settings.On(Settings.Icon))
             {
-                Sprite icon = IconOf(item);
+                Sprite icon = Icons.IconOf(item);
                 if (icon != null) DrawIcon(ti, r, icon);
             }
             for (int i = 0; i < r.Bars.Count; i++) DrawBar(ti, r.Bars[i]);
@@ -333,44 +320,6 @@ namespace SectionedTooltips
             RectTransform rt = img.rectTransform;
             rt.anchoredPosition = new Vector2(Mathf.Round(x - originX), Mathf.Round(y - originY));
             rt.sizeDelta = new Vector2(w, h);
-        }
-    }
-
-    [HarmonyPatch(typeof(GameItemElement), "GetTooltip")]
-    internal static class GetTooltipPatch
-    {
-        private static void Postfix(GameItemElement __instance, RichText __result)
-        {
-            Overlay.Note(__instance, __result);
-        }
-    }
-
-    [HarmonyPatch(typeof(GameItemElement), "GetTooltipAdvanced")]
-    internal static class GetTooltipAdvancedPatch
-    {
-        private static void Postfix(GameItemElement __instance, RichText __result)
-        {
-            Overlay.Note(__instance, __result);
-        }
-    }
-
-    [HarmonyPatch(typeof(OverlayHandler), "ShowTooltip", new Type[] { typeof(Vector2), typeof(Vector2), typeof(RichText), typeof(int) })]
-    internal static class ShowTooltipPatch
-    {
-        private static void Postfix(OverlayHandler __instance, RichText richText, Vector2 __0)
-        {
-            Overlay.Cursor = __0;
-            Overlay.OnShow(__instance, richText);
-        }
-    }
-
-    [HarmonyPatch(typeof(OverlayHandler), "HideTooltip")]
-    internal static class HideTooltipPatch
-    {
-        private static void Postfix()
-        {
-            try { Overlay.Hide(); }
-            catch { }
         }
     }
 }
