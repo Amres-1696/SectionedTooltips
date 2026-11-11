@@ -289,6 +289,8 @@ namespace SectionedTooltips
             public float LabelCol; // 各节的标签列（见 TicketGrid）
             /// 各节的制表位列几何（见 TicketGrid.TabLayoutOf）；一次构建里算一次，绘制与宽度共用。
             public readonly Dictionary<Block, Ticket.TabLayout> Tabs = new Dictionary<Block, Ticket.TabLayout>();
+            /// 各节的定型结果（见 TicketPlan.PlanOf）；一次构建里每节只定一次，画和量宽共用。
+            public readonly Dictionary<Block, Ticket.SectionPlan> Plans = new Dictionary<Block, Ticket.SectionPlan>();
             /// 液体一节带条成分行的数字列（见 TicketGrid.NumColsOf）。
             public readonly Dictionary<Block, Ticket.NumCols> Nums = new Dictionary<Block, Ticket.NumCols>();
             public float Px = 1f;  // 每个卡片单位占多少屏幕像素，图标要对齐整像素（见 PixelFit）

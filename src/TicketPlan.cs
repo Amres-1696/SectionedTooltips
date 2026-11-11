@@ -74,6 +74,14 @@ namespace SectionedTooltips
             public bool TrailingBreak;
         }
 
+        /// 这一节的定型结果；一次构建里只定一次。
+        private static SectionPlan PlanOf(Ctx c, Block source)
+        {
+            SectionPlan plan;
+            if (!c.Plans.TryGetValue(source, out plan)) c.Plans[source] = plan = PlanOf(source);
+            return plan;
+        }
+
         /// 小标题（“升级：”、“模组效果：”）给它下面没有自己标签的行当标签；下面的行有自己的标签时，它单独占一行。
         private static SectionPlan PlanOf(Block source)
         {

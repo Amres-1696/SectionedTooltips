@@ -223,7 +223,7 @@ namespace SectionedTooltips
 
         private static float Section(Ctx c, Block source, float y)
         {
-            SectionPlan plan = PlanOf(source);
+            SectionPlan plan = PlanOf(c, source);
             Block bl = plan.Block;
             y = SectionHeader(c, Sections.TitleOf(bl.Key), y);
             float left = LabelX(c);
@@ -305,16 +305,6 @@ namespace SectionedTooltips
         {
             float h = Mathf.Max(LineH(c), GridText(c, label, RowSize(c), LabelX(c), y));
             return y + h + RowGap(c);
-        }
-
-        /// 这个小标题会单独占一行：后面是有自己标签的行、另一个小标题，或者它在最后。
-        /// 这样的小标题不用撑宽标签列。模组效果例外：Section 把它画在标签列里，后面的效果行（“质量 +6%”拆出的行也算）排在数值列。
-        private static bool AloneHeading(Block bl, int i)
-        {
-            if (i + 1 >= bl.Rows.Count) return true;
-            Row next = bl.Rows[i + 1];
-            if (bl.Key == Sections.Module && !next.Heading && UpgradeOf(next) == null && EffectOf(next) != null) return false;
-            return next.Heading || next.IsPair;
         }
 
         /// 名字靠左，百分比右对齐到单子右边；名字太长就在数值左边折行。
@@ -529,9 +519,8 @@ namespace SectionedTooltips
             return text;
         }
 
-        private static float GridPairWidth(Ctx c, Block bl, int i, bool strip)
+        private static float GridPairWidth(Ctx c, Block bl, Row row, Row reading, bool strip)
         {
-            Row row = bl.Rows[i], reading = Reading(bl, i);
             string note;
             PairLabel(c, row, strip, out note);
             List<Seg> value = row.Value;
@@ -1159,30 +1148,29 @@ namespace SectionedTooltips
             for (int i = 0; i < r.Blocks.Count; i++)
             {
                 if (!OnSlip(r.Blocks[i].Key)) continue;
-                // 和 Section 画的顺序一致，小标题后面跟的是哪一行才算得准。
-                Block bl = StatusFirst(r.Blocks[i]);
-                bool strip = StripsBrackets(c, bl), module = bl.Key == Sections.Module;
-                for (int j = 0; j < bl.Rows.Count; j++)
+                SectionPlan plan = PlanOf(c, r.Blocks[i]);
+                bool strip = StripsBrackets(c, plan.Block);
+                for (int j = 0; j < plan.Items.Count; j++)
                 {
-                    Row row = bl.Rows[j];
-                    if (row.Heading)
+                    PlanItem item = plan.Items[j];
+                    string note;
+                    // 借来的小标题写在标签列里；单独占一行的（HeadingLine）不用撑宽标签列。
+                    if (item.Label != null && (item.Kind != ItemKind.WeaponAffix || plan.Labelled))
+                        w = Mathf.Max(w, c.Measure(InkRich(item.Label.Label, InkSoft, false), size));
+                    switch (item.Kind)
                     {
-                        if (!AloneHeading(bl, j)) w = Mathf.Max(w, c.Measure(InkRich(row.Label, InkSoft, false), size));
-                    }
-                    else if (row.IsPair)
-                    {
-                        if (row.Wide) continue;
-                        Upgrade u = UpgradeOf(row);
-                        string note;
-                        if (u != null) w = Mathf.Max(w, c.Measure(u.Name, size));
-                        else if (GeneOf(bl, row) != null) w = Mathf.Max(w, c.Measure(InkRich(row.Label, InkSoft, false), size));
-                        else w = Mathf.Max(w, c.Measure(PairLabel(c, row, strip, out note), size));
-                    }
-                    else
-                    {
-                        List<Row> parts = PipeParts(row);
-                        string note;
-                        if (parts != null) for (int k = 0; k < parts.Count; k++) w = Mathf.Max(w, c.Measure(PairLabel(c, parts[k], false, out note), size));
+                        case ItemKind.Upgrade:
+                            w = Mathf.Max(w, c.Measure(item.Upgrade.Name, size));
+                            break;
+                        case ItemKind.Genes:
+                            for (int k = 0; k < item.Rows.Count; k++) w = Mathf.Max(w, c.Measure(InkRich(item.Rows[k].Label, InkSoft, false), size));
+                            break;
+                        case ItemKind.Pair:
+                            w = Mathf.Max(w, c.Measure(PairLabel(c, item.Row, strip, out note), size));
+                            break;
+                        case ItemKind.Pipes:
+                            for (int k = 0; k < item.Parts.Count; k++) w = Mathf.Max(w, c.Measure(PairLabel(c, item.Parts[k], false, out note), size));
+                            break;
                     }
                 }
             }
@@ -1197,52 +1185,55 @@ namespace SectionedTooltips
             float value = 0f, size = RowSize(c), tabs = 0f;
             for (int i = 0; i < r.Blocks.Count; i++)
             {
-                Block bl = r.Blocks[i];
-                if (!OnSlip(bl.Key)) continue;
-                bool labelled = Labelled(bl), module = bl.Key == Sections.Module, strip = StripsBrackets(c, bl);
-                // 效果的文字从这一串里最宽的标签之后开始，不是从自己那个标签后面。
-                float chip = 0f, said = 0f;
-                GeneCols genes = null;
-                for (int j = 0; j < bl.Rows.Count; j++)
+                if (!OnSlip(r.Blocks[i].Key)) continue;
+                SectionPlan plan = PlanOf(c, r.Blocks[i]);
+                Block bl = plan.Block;
+                bool strip = StripsBrackets(c, bl);
+                for (int j = 0; j < plan.Items.Count; j++)
                 {
-                    Row row = bl.Rows[j];
-                    if (row.Heading) continue;
-                    if (row.Wide)
+                    PlanItem item = plan.Items[j];
+                    Row row = item.Row;
+                    switch (item.Kind)
                     {
-                        value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft, false), size)
-                            + c.Gap + c.Measure(InkRich(row.Value, Ink), size));
-                        continue;
+                        case ItemKind.Wide:
+                            value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft, false), size)
+                                + c.Gap + c.Measure(InkRich(row.Value, Ink), size));
+                            break;
+                        case ItemKind.Upgrade:
+                            value = Mathf.Max(value, UpgradeWidth(c, item.Upgrade));
+                            break;
+                        case ItemKind.Effects:
+                        {
+                            // 效果的文字从这一串里最宽的标签之后开始，不是从自己那个标签后面。
+                            float chip = 0f, said = 0f;
+                            for (int k = 0; k < item.Effects.Count; k++)
+                            {
+                                chip = Mathf.Max(chip, EffectChipWidth(c, item.Effects[k]));
+                                string text = EffectText(item.Effects[k]);
+                                if (text.Length > 0) said = Mathf.Max(said, c.Measure(text, size));
+                            }
+                            value = Mathf.Max(value, said > 0f ? chip + c.Gap + said : chip);
+                            break;
+                        }
+                        case ItemKind.Genes:
+                            value = Mathf.Max(value, GeneColsOf(c, bl).Width);
+                            break;
+                        case ItemKind.Pair:
+                            value = Mathf.Max(value, GridPairWidth(c, bl, row, item.Reading, strip));
+                            break;
+                        case ItemKind.Pipes:
+                            if (plan.Labelled) for (int k = 0; k < item.Parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(item.Parts[k].Value), size));
+                            break;
+                        case ItemKind.WeaponAffix:
+                        case ItemKind.Text:
+                            // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
+                            // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
+                            // 否则单子不够宽，中文会在字中间断成两行。纯文字的节里长句照旧折行，不撑宽单子。
+                            if (plan.Labelled || BarOf(row.Segs) != null) value = Mathf.Max(value, GridRowWidth(c, row));
+                            break;
+                        // 单独一行的小标题和模组词条会折行；制表位行按整表宽度算，见下面的 tab。
                     }
-                    if (!row.IsPair)
-                    {
-                        // 数值列里没有自己标签的行（“金属锭×1：9/10、再+175%升档”）。
-                        if (row.Cells != null) continue; // 制表位行按整表宽度算，见下面的 tab
-                        if ((module && Affix(row)) || (j > 0 && Reading(bl, j - 1) == row)) continue;
-                        // 带进度条的读数行（“▬ 2000/2000mL 铁锈水”）是整行画出来的，宽度必须计入，
-                        // 否则单子不够宽，中文会在字中间断成两行。长句照旧折行，不撑宽单子。
-                        if (!labelled && BarOf(row.Segs) == null) continue;
-                        List<Row> parts = PipeParts(row);
-                        if (parts != null) for (int k = 0; k < parts.Count; k++) value = Mathf.Max(value, c.Measure(ValueRich(parts[k].Value), size));
-                        else value = Mathf.Max(value, GridRowWidth(c, row));
-                        continue;
-                    }
-                    Upgrade u = UpgradeOf(row);
-                    Effect e = u == null ? EffectOf(row) : null;
-                    if (u != null) value = Mathf.Max(value, UpgradeWidth(c, u));
-                    else if (e != null)
-                    {
-                        chip = Mathf.Max(chip, EffectChipWidth(c, e));
-                        string text = EffectText(e);
-                        if (text.Length > 0) said = Mathf.Max(said, c.Measure(text, size));
-                    }
-                    else if (GeneOf(bl, row) != null)
-                    {
-                        if (genes == null) genes = GeneColsOf(c, bl);
-                        value = Mathf.Max(value, genes.Width);
-                    }
-                    else value = Mathf.Max(value, GridPairWidth(c, bl, j, strip));
                 }
-                if (chip > 0f) value = Mathf.Max(value, said > 0f ? chip + c.Gap + said : chip);
                 TabLayout tab = TabLayoutOf(c, bl);
                 if (tab != null && tab.Width > tabs) tabs = tab.Width;
             }
