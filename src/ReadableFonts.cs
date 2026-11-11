@@ -25,9 +25,7 @@ namespace SectionedTooltips
         {
             get
             {
-#if DEVDUMP
-                if (Stress.EmulateReadableFonts) return true;
-#endif
+                if (Dev.BigFonts) return true;
                 if (Time.unscaledTime - checkedAt > 2f)
                 {
                     checkedAt = Time.unscaledTime;

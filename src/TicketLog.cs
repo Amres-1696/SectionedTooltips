@@ -139,9 +139,7 @@ namespace SectionedTooltips
         private static string SlipName(GameItemElement item)
         {
             string name = DumpName(item);
-#if DEVDUMP
-            if (Stress.Label != null) return name;
-#endif
+            if (Dev.Label != null) return name;
             return builtFull ? (Expand.Enabled ? name + " 展开" : name) : name + " 收起";
         }
 
@@ -150,9 +148,7 @@ namespace SectionedTooltips
             string name;
             try { name = item != null ? item.GetDisplayName(false) : "?"; }
             catch { name = "?"; }
-#if DEVDUMP
-            if (Stress.Label != null) return "压力:" + Stress.Label + " · " + name;
-#endif
+            if (Dev.Label != null) return "压力:" + Dev.Label + " · " + name;
             return name;
         }
 

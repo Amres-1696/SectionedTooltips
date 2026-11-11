@@ -45,11 +45,8 @@ namespace SectionedTooltips
             if (contentsPanel) hash = unchecked(hash * 397) ^ ContentsInfo.Signature(f.Item);
             if (timer != null) frameSignatureMs = timer.Elapsed.TotalMilliseconds;
             Cached hit = Find(f.Item);
-            bool stress = false;
-#if DEVDUMP
-            // 压力测试要这件物品分节前的行，不能走缓存。
-            stress = Stress.Wanted(f.Item);
-#endif
+            // dev 构建的压力测试要这件物品分节前的行，不能走缓存。
+            bool stress = Dev.WantsStress(f.Item);
             if (hit != null && hit.Hash == hash && hit.Version == Settings.Version && !stress)
             {
                 Swap(b, hit.Output);
@@ -73,9 +70,7 @@ namespace SectionedTooltips
             int[] ordOf;
             string[] keyOf = AssignKeys(segs.Count, marks, out ordOf);
             List<Line> lines = SplitLines(segs, keyOf, ordOf);
-#if DEVDUMP
-            if (DumpAll.Running) DumpAll.Input(lines);
-#endif
+            Dev.LinesSplit(lines);
             // 其他模组写的行先修成我们认识的样子（归到对应小节、换成我们画的条），再做下面的筛选。
             Compat.Normalize(f.Item, b, lines);
             SplitCustomName(lines, f.Item);
@@ -93,15 +88,11 @@ namespace SectionedTooltips
                 && Settings.On(Settings.Bars);
             LiquidInfo liquid = liquidPanel ? ExtractLiquid(lines) : null;
 
-#if DEVDUMP
-            if (stress) Stress.Prepare(f.Item, lines, contents);
-            if (DumpAll.Running) DumpAll.GroupInput(lines);
-#endif
+            Dev.BeforeGroup(f.Item, lines, contents, stress);
             List<Block> blocks = Group(lines);
-#if DEVDUMP
-            if (DumpAll.Running)
+            if (Dev.Dumping)
             {
-                // 经典风格把最终文字也记下来；估价单的卡片要 UI，靠 [slip] 日志看。
+                // dev 构建的全量导出：只记下分节结果，不画。经典风格把最终文字也记下来；估价单的卡片要 UI，靠 [slip] 日志看。
                 LayoutResult classic = null;
                 RichTextBuilder classicText = null;
                 if (!Settings.IsTicket)
@@ -109,11 +100,10 @@ namespace SectionedTooltips
                     classic = new LayoutResult();
                     classicText = Render(blocks, Settings.On(Settings.Icon) ? IconCellsFor(Icons.IconOf(f.Item)) : 0, classic);
                 }
-                DumpAll.Take(f.Item, blocks, classicText, classic);
+                Dev.Dumped(f.Item, blocks, classicText, classic);
                 LastItem = f.Item;
                 return;
             }
-#endif
             int iconCells = 0;
             if (Settings.On(Settings.Icon)) iconCells = IconCellsFor(Icons.IconOf(f.Item));
             LayoutResult result = new LayoutResult();
@@ -121,9 +111,7 @@ namespace SectionedTooltips
             result.Liquid = liquid;
             result.Blocks = blocks;
             RichTextBuilder output = Render(blocks, iconCells, result);
-#if DEVDUMP
-            if (timer != null && !Settings.IsTicket) DumpAll.LogClassic(f.Item, output, result);
-#endif
+            if (timer != null && !Settings.IsTicket) Dev.ClassicDone(f.Item, output, result);
 
             if (timer != null) frameLayoutMs = timer.Elapsed.TotalMilliseconds;
             if (timer != null && !ReferenceEquals(f.Item, loggedItem))

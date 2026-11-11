@@ -54,6 +54,12 @@ namespace SectionedTooltips
             }
         }
 
+        // dev 构建的钩子，实现在 Stress.cs；普通构建里没有实现，调用会被编译器去掉。
+        /// 显示之前：有排好的压力用例或样本等着这件物品，就先把它们逐个建成单子写进日志。
+        static partial void DevBeforeShow(TMP_Text tmp, GameItemElement item, RectTransform parent, RectTransform win);
+        /// 这一帧显示的单子（截图用）。
+        static partial void DevShown(GameItemElement item);
+
         internal static void Show(PixelWindow window, TMP_Text tmp, LayoutResult r, GameItemElement item)
         {
             RectTransform win = window != null ? window.rectTransform : null;
@@ -84,15 +90,7 @@ namespace SectionedTooltips
             bool hidden = fresh || !root.gameObject.activeSelf;
             // 构建前先激活：TextMeshPro 只给激活状态的文字排版和测量。
             root.gameObject.SetActive(true);
-#if DEVDUMP
-            Stress.PrepareSamples(item);
-            if (Stress.Pending(item))
-            {
-                float sy0 = Mathf.Abs(root.localScale.y), sx0 = Mathf.Abs(root.localScale.x);
-                Rect screen0 = Panels.ScreenRect(parent, win);
-                RunStress(tmp, item, sy0 > 0f ? screen0.height / sy0 : float.MaxValue, sx0 > 0f ? screen0.width / sx0 : float.MaxValue);
-            }
-#endif
+            DevBeforeShow(tmp, item, parent, win);
             bool full = Expand.Full;
             bool current = !fresh && card != null && ReferenceEquals(builtFor, r) && ReferenceEquals(builtItem, item) && builtFull == full;
             if (!current && (Reuse(r, item, full) || BuildNow(item, hidden)))
@@ -108,9 +106,7 @@ namespace SectionedTooltips
             Position(parent, win);
             Raise();
             Fade(win);
-#if DEVDUMP
-            if (card != null) Shots.Seen(card, SlipName(item));
-#endif
+            DevShown(item);
         }
 
         internal static void Hide()
@@ -267,10 +263,8 @@ namespace SectionedTooltips
         /// 把刚建好的卡片放到已存估价单的最前；丢掉最旧的、旧设置下建的，以及同一物品更早的：排版缓存每个物品只留一份，物品文字一变，旧估价单就再也显示不出来了。
         private static void Keep(LayoutResult r, GameItemElement item)
         {
-#if DEVDUMP
-            // 压力测试的单子建完就丢，不能挤掉存着的（尤其是同一件物品自己的那张）。
-            if (Stress.Label != null) return;
-#endif
+            // dev 构建压力测试的单子建完就丢，不能挤掉存着的（尤其是同一件物品自己的那张）。
+            if (Dev.Label != null) return;
             for (int i = slips.Count - 1; i >= 0; i--)
             {
                 Built s = slips[i];

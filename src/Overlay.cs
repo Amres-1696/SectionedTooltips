@@ -322,42 +322,4 @@ namespace SectionedTooltips
             rt.sizeDelta = new Vector2(w, h);
         }
     }
-
-    [HarmonyPatch(typeof(GameItemElement), "GetTooltip")]
-    internal static class GetTooltipPatch
-    {
-        private static void Postfix(GameItemElement __instance, RichText __result)
-        {
-            Overlay.Note(__instance, __result);
-        }
-    }
-
-    [HarmonyPatch(typeof(GameItemElement), "GetTooltipAdvanced")]
-    internal static class GetTooltipAdvancedPatch
-    {
-        private static void Postfix(GameItemElement __instance, RichText __result)
-        {
-            Overlay.Note(__instance, __result);
-        }
-    }
-
-    [HarmonyPatch(typeof(OverlayHandler), "ShowTooltip", new Type[] { typeof(Vector2), typeof(Vector2), typeof(RichText), typeof(int) })]
-    internal static class ShowTooltipPatch
-    {
-        private static void Postfix(OverlayHandler __instance, RichText richText, Vector2 __0)
-        {
-            Overlay.Cursor = __0;
-            Overlay.OnShow(__instance, richText);
-        }
-    }
-
-    [HarmonyPatch(typeof(OverlayHandler), "HideTooltip")]
-    internal static class HideTooltipPatch
-    {
-        private static void Postfix()
-        {
-            try { Overlay.Hide(); }
-            catch { }
-        }
-    }
 }

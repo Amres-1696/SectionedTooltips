@@ -8,18 +8,6 @@ using UnityEngine.UI;
 
 namespace SectionedTooltips
 {
-    /// 游戏给所有模组用同一套方式建设置面板：滑块不显示数值，纸色和标签色的列表只有名字。等它建好我们的面板，SettingsPanel 再补上缺的部分。面板结构不是预期的样子就原样不动。
-    [HarmonyPatch(typeof(ModConfigWindow), "Open")]
-    internal static class SettingsPanelPatch
-    {
-        private static void Postfix(LoadedMod mod, CustomUIWindow __result)
-        {
-            if (__result == null || mod == null || mod.Manifest == null || mod.Manifest.ID != SectionedTooltipsMod.Id) return;
-            try { SettingsPanel.Decorate(__result); }
-            catch (Exception e) { SectionedTooltipsMod.Error("could not add to the settings panel, it stays as the game made it: " + e.Message); }
-        }
-    }
-
     /// 挂在我们设置面板上：在滑块右边显示数值，在纸色列表旁显示色块，还有一张跟着控件走的示例估价单。它每帧读控件而不是监听，所以“恢复默认值”这种静默改动也能反映出来。
     internal sealed class SettingsPanel : MonoBehaviour
     {

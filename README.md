@@ -41,6 +41,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 
 | 路径 | 内容 |
 |---|---|
+| `src/Patches.cs` | 全部固定的 Harmony 补丁，按一帧里的先后排 |
 | `src/Capture.cs` | 记 `GetTooltipBasic` 期间各 helper 写过的 slice 区间 |
 | `src/Helpers.cs` | 90 多个 tooltip helper 的 patch 表，按调用顺序编号 |
 | `src/Layout.cs` | 排版的流程：读 builder、每行归到某一节、筛选、缓存 |
@@ -68,6 +69,7 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/AquaSense.cs` | 读《更好的水商操作体验》的成分接口，把它的成分行画成进度条 |
 | `src/ReadableFonts.cs` | 和《字体大小优化》的兼容：它开着时估价单自己放大，字号抬到它不改的范围 |
 | `src/Expand.cs` | 平时收起、按住展开键看完整估价单 |
+| `src/Dev.cs` | dev 工具接进正式流程的唯一入口；普通构建里是空的 |
 | `src/DumpAll.cs` | dev 构建：导出全部物品的分节结果（`dumpall.flag`） |
 | `src/RowCorpus.cs` | dev 构建和离线测试：并块拆列的回放语料（`rows-*.txt`）的读写 |
 | `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`）；状态样本和每一种物品也能各建一张（`samples.flag`、`slips.flag`） |

@@ -545,6 +545,20 @@ namespace SectionedTooltips
 
     internal static partial class Ticket
     {
+        static partial void DevBeforeShow(TMP_Text tmp, GameItemElement item, RectTransform parent, RectTransform win)
+        {
+            Stress.PrepareSamples(item);
+            if (!Stress.Pending(item)) return;
+            float sy0 = Mathf.Abs(root.localScale.y), sx0 = Mathf.Abs(root.localScale.x);
+            Rect screen0 = Panels.ScreenRect(parent, win);
+            RunStress(tmp, item, sy0 > 0f ? screen0.height / sy0 : float.MaxValue, sx0 > 0f ? screen0.width / sx0 : float.MaxValue);
+        }
+
+        static partial void DevShown(GameItemElement item)
+        {
+            if (card != null) Shots.Seen(card, SlipName(item));
+        }
+
         /// 压力测试：用当前的 tooltip 窗口把排好的用例逐个建成单子、写日志、丢掉，然后照常显示这件物品。
         private static void RunStress(TMP_Text tmp, GameItemElement item, float room, float roomW)
         {

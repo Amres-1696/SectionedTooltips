@@ -378,13 +378,12 @@ namespace SectionedTooltips
                 g.blocksRaycasts = false;
             }
             bool log = Settings.Debug != null && Settings.Debug.Value;
-#if DEVDUMP
-            if (Stress.Label != null)
+            // dev 构建的压力用例和样本：不管开没开调试日志都写。
+            if (Dev.Label != null)
             {
-                Stress.AfterBuild(card);
+                Dev.AfterBuild(card);
                 log = true;
             }
-#endif
             if (log) LogSlip(c, item, card, w, h);
             Keep(r, item);
             if (probe == null) return true;
