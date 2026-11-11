@@ -5,6 +5,7 @@ using UnityEngine;
 namespace SectionedTooltips
 {
     // 模组挂在游戏上的全部固定补丁（tooltip helper 的那一批是运行时按表打的，见 Helpers）。一帧里的顺序：
+    //   HasTooltip        设置成按住展开键才显示时，键没按着就告诉游戏“这件物品没有 tooltip”
     //   GetTooltipBasic   前缀开始记 helper 写了哪些段，finalizer 里重新排版（Layout.Apply）
     //   AddProgressBar    记下游戏画的进度条
     //   GetTooltip(Advanced)  记下这份文字对应哪次排版（Overlay.Note）
@@ -120,6 +121,17 @@ namespace SectionedTooltips
         {
             Overlay.Cursor = __0;
             Overlay.OnShow(__instance, richText);
+        }
+    }
+
+    /// 游戏每帧先问鼠标下的物品有没有 tooltip（它自己用这个关掉带 IS_TOOLTIP_DISABLED_TAG 的物品），没有就走它自己的隐藏。
+    /// 所以“按住展开键才显示”只要在这里答没有：游戏不显示，别的模组挂在 tooltip 上的东西也跟着不出现，不用我们去藏。
+    [HarmonyPatch(typeof(GameItemElement), "HasTooltip")]
+    internal static class HasTooltipPatch
+    {
+        private static void Postfix(ref bool __result)
+        {
+            if (__result && Expand.Concealed) __result = false;
         }
     }
 

@@ -102,6 +102,8 @@ namespace SectionedTooltips
         internal static ConfigEntry<bool> CollapseContents;
         internal static ConfigEntry<bool> CollapseDescription;
         internal static ConfigEntry<bool> CollapseModInfo;
+        internal static ConfigEntry<bool> CollapsePriceFactors;
+        internal static ConfigEntry<bool> ShowOnKey;
         /// 每个 Ticket.TagGroups 条目一个颜色设置。
         internal static ConfigEntry<string>[] TagColors;
         internal static ConfigEntry<bool> Debug;
@@ -179,6 +181,8 @@ namespace SectionedTooltips
             CollapseContents = cfg.Define("CollapseContents", true, fold, Text("cfg_collapse_contents"), Text("cfg_collapse_contents_tip"), false);
             CollapseDescription = cfg.Define("CollapseDescription", true, fold, Text("cfg_collapse_desc"), Text("cfg_collapse_desc_tip"), false);
             CollapseModInfo = cfg.Define("CollapseModInfo", false, fold, Text("cfg_collapse_mods"), Text("cfg_collapse_mods_tip"), false);
+            CollapsePriceFactors = cfg.Define("CollapsePriceFactors", false, fold, Text("cfg_collapse_factors"), Text("cfg_collapse_factors_tip"), false);
+            ShowOnKey = cfg.Define("ShowOnKey", false, fold, Text("cfg_show_on_key"), Text("cfg_show_on_key_tip"), false);
             // 估价单的分类标签：底色的开关，以及每组一个颜色。
             TagBackground = cfg.Define("TagBackground", true, tags, Text("cfg_tag_bg"), Text("cfg_tag_bg_tip"), false);
             TagColors = new ConfigEntry<string>[Ticket.TagGroups.Length];
@@ -219,6 +223,7 @@ namespace SectionedTooltips
             CollapseContents.OnChanged += delegate { Version++; };
             CollapseDescription.OnChanged += delegate { Version++; };
             CollapseModInfo.OnChanged += delegate { Version++; };
+            CollapsePriceFactors.OnChanged += delegate { Version++; };
             for (int i = 0; i < TagColors.Length; i++) TagColors[i].OnChanged += delegate { Version++; };
 
             Enabled.OnChanged += delegate { Version++; };

@@ -45,7 +45,7 @@ namespace SectionedTooltips
             /// 窗口的高和宽，用根节点的单位（字号抬高之前的；Room 是换算到这张卡片之后的高）。
             public float Screen = float.MaxValue, ScreenW = float.MaxValue;
             /// 这一张平时收起的部分（见 Expand），以及实际收起了哪些（写进底部的提示）。
-            public bool FoldPrices, FoldContents, FoldDesc, FoldMods;
+            public bool FoldPrices, FoldContents, FoldDesc, FoldMods, FoldFactors;
             public readonly List<string> Folded = new List<string>();
             /// 因为比窗口宽，整张缩到的比例（不含字号抬高的那部分）。
             public float Fit = 1f;
@@ -179,6 +179,49 @@ namespace SectionedTooltips
             BuildCard(tmp, r, item, full, room, roomW, true);
         }
 
+        /// 这张单子实际要画的排版。收起价格影响因素时，附加信息里那几行（“市场  日用品救济行动 -40%”、“黑市溢价  +70%”）先拿掉；
+        /// 返回的是副本，原来的排版属于缓存。没有可拿掉的就原样返回。
+        private static LayoutResult Visible(Ctx c, LayoutResult r)
+        {
+            if (!c.FoldFactors || r.Blocks == null) return r;
+            List<Block> blocks = new List<Block>(r.Blocks.Count);
+            bool removed = false;
+            for (int i = 0; i < r.Blocks.Count; i++)
+            {
+                Block bl = r.Blocks[i];
+                if (bl.Key != Sections.Mods) { blocks.Add(bl); continue; }
+                Block kept = new Block();
+                kept.Key = bl.Key;
+                for (int j = 0; j < bl.Rows.Count; j++)
+                {
+                    if (PriceFactor(bl.Rows[j])) removed = true;
+                    else kept.Rows.Add(bl.Rows[j]);
+                }
+                if (kept.Rows.Count > 0) blocks.Add(kept);
+            }
+            if (!removed) return r;
+            Folded(c, "fold_factors");
+            LayoutResult view = new LayoutResult();
+            view.Blocks = blocks;
+            view.Contents = r.Contents;
+            view.Liquid = r.Liquid;
+            view.IconLine = r.IconLine;
+            view.IconChars = r.IconChars;
+            return view;
+        }
+
+        /// 价格影响因素：一对，数值以带正负号的百分比结尾（其他模组写在附加信息里的市场事件、黑市溢价）。
+        private static bool PriceFactor(Row row)
+        {
+            if (!row.IsPair || row.Value == null) return false;
+            string v = TextUnits.Plain(row.Value).Trim();
+            int i = v.Length - 1;
+            if (i < 2 || v[i] != '%') return false;
+            int digits = 0;
+            for (i--; i >= 0 && (char.IsDigit(v[i]) || v[i] == '.'); i--) digits++;
+            return digits > 0 && i >= 0 && (v[i] == '+' || v[i] == '-' || v[i] == '−');
+        }
+
         /// 记下这张单子收起了哪一部分，写进底部的提示。
         private static void Folded(Ctx c, string key)
         {
@@ -187,11 +230,11 @@ namespace SectionedTooltips
         }
 
         /// 建一张单子。fine：每行另起一块（见 BuildFlow）。单子比窗口高、还没按行分块时返回 false：这张半成品不要了，调用方按行分块重建。
-        private static bool BuildCard(TMP_Text tmp, LayoutResult r, GameItemElement item, bool full, float room, float roomW, bool fine)
+        private static bool BuildCard(TMP_Text tmp, LayoutResult source, GameItemElement item, bool full, float room, float roomW, bool fine)
         {
             // 上一张卡片留着，只是隐藏，鼠标回到它的物品时直接用。
             if (card != null) card.gameObject.SetActive(false);
-            builtFor = r;
+            builtFor = source;
             builtItem = item;
             builtFull = full;
             lastBuildFrame = Time.frameCount;
@@ -205,6 +248,8 @@ namespace SectionedTooltips
             c.FoldContents = !full && Expand.Folds(Settings.CollapseContents);
             c.FoldDesc = !full && Expand.Folds(Settings.CollapseDescription);
             c.FoldMods = !full && Expand.Folds(Settings.CollapseModInfo);
+            c.FoldFactors = !full && !c.FoldMods && Expand.Folds(Settings.CollapsePriceFactors);
+            LayoutResult r = Visible(c, source);
             // Measure 会抵掉根节点的缩放（文字在屏幕上和游戏一样大），所以大小设置要在这里乘进去。
             // 有模组会在建好后放大小字号时（见 Compat.SmallTextResized）：我们排版时不知道，就会重叠。所以自己先放大同样倍数，
             // 再把所有字号抬到它不再动的字号以上、整张按同样比例缩回去，看起来一样大，它也就不再动我们的字。
@@ -385,7 +430,7 @@ namespace SectionedTooltips
                 log = true;
             }
             if (log) LogSlip(c, item, card, w, h);
-            Keep(r, item);
+            Keep(source, item);
             if (probe == null) return true;
             Step("finish");
             SectionedTooltipsMod.Log(string.Format("slip built in {0:F1} ms ({1} objects, {2} rectangles), frame {3}: {4}",
