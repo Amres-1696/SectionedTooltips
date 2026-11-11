@@ -83,7 +83,7 @@ namespace SectionedTooltips
                     GameItem item = null;
                     try
                     {
-                        item = DirectoryMaster.Create<GameItem>(id);
+                        item = States.Create(id);
                         if (item == null) { Failed.Add(id + "：创建失败"); continue; }
                         input.Clear();
                         currentId = id;

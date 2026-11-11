@@ -45,6 +45,17 @@ namespace SectionedTooltips
         /// 正在给样本生成 tooltip：这时候别的 dev 功能（压力测试）不要插手。
         internal static bool Building;
 
+        /// 新建一件物品。新物品带随机值（纯度、性别……），先按 id 定好随机种子，同一件物品每次导出都一样，前后两次才比得出差别。
+        internal static GameItem Create(string id)
+        {
+            UnityEngine.Random.State keep = UnityEngine.Random.state;
+            int seed = 17;
+            for (int i = 0; i < id.Length; i++) seed = unchecked(seed * 31 + id[i]);
+            UnityEngine.Random.InitState(seed);
+            try { return DirectoryMaster.Create<GameItem>(id); }
+            finally { UnityEngine.Random.state = keep; }
+        }
+
         /// 造好全部样本；用完要 Destroy。造某一个失败只跳过它，并记日志。
         internal static List<Sample> Make()
         {
