@@ -15,10 +15,14 @@ namespace SectionedTooltips
             return false;
         }
 
-        internal static List<Block> Group(List<Line> lines)
+        /// 这一次并块用的设置；Group 进来时填好。
+        private static RowOptions opt;
+
+        internal static List<Block> Group(List<Line> lines, RowOptions options)
         {
+            opt = options;
             // 宽度设置是给经典风格用的；估价单自己决定换行，这里保持默认值。
-            int maxLabel = Math.Max(8, (Settings.IsTicket ? 46 : Settings.MaxChars) * 3 / 5) * TextUnits.Cell;
+            int maxLabel = Math.Max(8, (opt.Ticket ? 46 : opt.MaxChars) * 3 / 5) * TextUnits.Cell;
             List<Block> blocks = new List<Block>();
             Block cur = null;
             for (int i = 0; i < lines.Count; i++)
@@ -88,10 +92,10 @@ namespace SectionedTooltips
                 }
                 cur.Rows.Add(row);
                 // 经典风格里没有标签的行前面会多一个圆点，只给估价单拆。
-                if (row.IsPair && key != Sections.Value && Settings.IsTicket) SplitPercentList(cur, row);
+                if (row.IsPair && key != Sections.Value && opt.Ticket) SplitPercentList(cur, row);
             }
             MergeSplitSections(blocks);
-            if (Settings.IsTicket) LiquidTables(blocks);
+            if (opt.Ticket) LiquidTables(blocks);
             return blocks;
         }
 
@@ -292,7 +296,7 @@ namespace SectionedTooltips
                 }
             }
             List<List<Unit>> cells = null;
-            if (split < 0 && pairs && Settings.IsTicket && !hasBar && l.Key != Sections.Value)
+            if (split < 0 && pairs && opt.Ticket && !hasBar && l.Key != Sections.Value)
                 cells = TextUnits.SplitCells(u);
 
             // 三列以上是表格；只有两格时仍优先认游戏的“标签    数值”。
@@ -360,12 +364,11 @@ namespace SectionedTooltips
         /// “400/400”、“3 / 5”、“20.23/12 kg”：分数的数值在前面加一条进度条，按装满程度上色。数字还是那些，没多显示什么。
         private static void AddFractionBar(Row pair, string value)
         {
-            if (Settings.Bars != null && !Settings.Bars.Value) return;
-            if (Settings.FractionBars != null && !Settings.FractionBars.Value) return;
+            if (!opt.FractionBars) return;
             for (int i = 0; i < pair.Value.Count; i++) if (pair.Value[i].Bar != null) return;
 
             float a, b;
-            if (!TextRules.ReadFraction(value, LocTemplates.Known, LocTemplates.Prefix, LocTemplates.Mid, out a, out b)) return;
+            if (!TextRules.ReadFraction(value, opt.TemplateKnown, opt.TemplatePrefix, opt.TemplateMid, out a, out b)) return;
             float ratio = a / b;
 
             BarMark m = new BarMark();

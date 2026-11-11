@@ -44,8 +44,8 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/Capture.cs` | 记 `GetTooltipBasic` 期间各 helper 写过的 slice 区间 |
 | `src/Helpers.cs` | 90 多个 tooltip helper 的 patch 表，按调用顺序编号 |
 | `src/Layout.cs` | 排版的流程：读 builder、每行归到某一节、筛选、缓存 |
-| `src/LayoutModel.cs` | 排版的数据：行、块、排版结果 |
-| `src/LayoutRows.cs` | 把行并成块、拆成标签/数值/表格 |
+| `src/LayoutModel.cs` | 排版的数据：文字段、行、块、排版结果，不引用游戏程序集 |
+| `src/LayoutRows.cs` | 把行并成块、拆成标签/数值/表格；设置从参数进来，可以离线跑 |
 | `src/LayoutClassic.cs` | Classic 风格的文字输出 |
 | `src/Ticket.cs` | 估价单的纸、印章、标题、价格、页脚、文字上色 |
 | `src/TicketGrid.cs` | 估价单的小节网格：标签列、数值列、进度条、升级、模组效果 |
@@ -63,11 +63,12 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/ReadableFonts.cs` | 和《字体大小优化》的兼容：它开着时估价单自己放大，字号抬到它不改的范围 |
 | `src/Expand.cs` | 平时收起、按住展开键看完整估价单 |
 | `src/DumpAll.cs` | dev 构建：导出全部物品的分节结果（`dumpall.flag`） |
+| `src/RowCorpus.cs` | dev 构建和离线测试：并块拆列的回放语料（`rows-*.txt`）的读写 |
 | `src/Stress.cs` | dev 构建：压力测试，用假数据建极端单子写进日志（`stress.flag`）；状态样本和每一种物品也能各建一张（`samples.flag`、`slips.flag`） |
 | `src/Shots.cs` | dev 构建：把显示过的估价单截图存进模组数据目录（`shots.flag`） |
 | `src/TextRules.cs` | 纯文本规则（分数、模板、括号、清单），不引用游戏程序集 |
 | `src/Fuse.cs` | 连续失败熔断 |
-| `tests/` | 无头自检：`tests\test.bat` |
+| `tests/` | 无头自检：`tests\test.bat`。`tests\corpus\` 里有回放语料时（dev 构建导出、`tests\accept.bat` 收进来，不进仓库）还会把每件物品的并块拆列重跑一遍对比 |
 | `Localization/*.csv` | 文案，目前中英两份 |
 
 `workshop/`（发布素材）、`build.bat`（本地构建脚本）和 `manifest.dev.xml`（dev 构建的清单）不进仓库。

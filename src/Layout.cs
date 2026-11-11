@@ -95,6 +95,7 @@ namespace SectionedTooltips
 
 #if DEVDUMP
             if (stress) Stress.Prepare(f.Item, lines, contents);
+            if (DumpAll.Running) DumpAll.GroupInput(lines);
 #endif
             List<Block> blocks = Group(lines);
 #if DEVDUMP
@@ -153,6 +154,24 @@ namespace SectionedTooltips
             Swap(b, output);
             LastItem = f.Item;
             LastResult = result;
+        }
+
+        /// 按当前的设置和语言并块、拆列。
+        internal static List<Block> Group(List<Line> lines)
+        {
+            return Group(lines, RowOptionsNow());
+        }
+
+        internal static RowOptions RowOptionsNow()
+        {
+            RowOptions o;
+            o.Ticket = Settings.IsTicket;
+            o.MaxChars = Settings.MaxChars;
+            o.FractionBars = Settings.On(Settings.Bars) && Settings.On(Settings.FractionBars);
+            o.TemplateKnown = LocTemplates.Known;
+            o.TemplatePrefix = LocTemplates.Prefix;
+            o.TemplateMid = LocTemplates.Mid;
+            return o;
         }
 
         // 调试用：这一帧排版各段的耗时，给 LogSlowFrame 用。

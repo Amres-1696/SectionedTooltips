@@ -3,6 +3,54 @@ using Palette = RenderHandler.ColorPalette;
 
 namespace SectionedTooltips
 {
+    /// 一段样式一致的 tooltip 文本，从 RichTextBuilder 内部的 TextSlice 复制出来。
+    internal sealed class Seg
+    {
+        public string Text = "";
+        public Palette Color = Palette.None;
+        public bool Bold, Italic, Underline, Strike, NewLine;
+        public Palette Background = Palette.None;
+        public Palette UnderlineColor = Palette.None;
+        public Palette StrikeColor = Palette.None;
+
+        /// 这一段是游戏用 AddProgressBar 画的进度条时设置。
+        public BarMark Bar;
+
+        public Seg With(string text)
+        {
+            Seg s = (Seg)MemberwiseClone();
+            s.Text = text;
+            return s;
+        }
+    }
+
+    /// slice 区间 [Start, End) 是一条进度条（AddProgressBar 画的）。
+    internal sealed class BarMark
+    {
+        public int Start;
+        public int End;
+        public float Ratio;
+        public RenderHandler.ColorPalette Color;
+        public RenderHandler.ColorPalette Background;
+        /// 其他模组按 RGB 给的条色（AquaSense 的成分条）；有它时不看 Color。
+        public bool HasRgb;
+        public UnityEngine.Color32 Rgb;
+    }
+
+    /// 并块、拆列时要看的设置和语言模板。游戏里从 Settings 和 LocTemplates 取（见 Layout.Group），离线回放时直接填。
+    internal struct RowOptions
+    {
+        /// 估价单风格（否则是经典风格）。
+        public bool Ticket;
+        /// 经典风格每行最多多少个半角字符。
+        public int MaxChars;
+        /// 分数后面补一条进度条（图形进度条和分数进度条两个设置都开着）。
+        public bool FractionBars;
+        /// 探到了游戏“耐久度 a/b”的模板；Prefix 和 Mid 是第一个数字前面、两个数字中间的字面量。
+        public bool TemplateKnown;
+        public string TemplatePrefix, TemplateMid;
+    }
+
     internal sealed class Line
     {
         public List<Seg> Segs = new List<Seg>();

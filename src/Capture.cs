@@ -14,19 +14,6 @@ namespace SectionedTooltips
         public int End;
     }
 
-    /// slice 区间 [Start, End) 是一条进度条（AddProgressBar 画的）。
-    internal sealed class BarMark
-    {
-        public int Start;
-        public int End;
-        public float Ratio;
-        public RenderHandler.ColorPalette Color;
-        public RenderHandler.ColorPalette Background;
-        /// 其他模组按 RGB 给的条色（AquaSense 的成分条）；有它时不看 Color。
-        public bool HasRgb;
-        public UnityEngine.Color32 Rgb;
-    }
-
     /// 一次 GetTooltipBasic 调用期间的状态，helper 运行时往里记。
     internal sealed class Frame
     {

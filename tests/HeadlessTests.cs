@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using SectionedTooltips;
 
 /// <summary>
-/// 无头自检：只编 TextRules.cs 和 TextUnits.cs（这两个文件不引用游戏程序集），
-/// 用桌面 .NET Framework 直接跑，不需要启动游戏。
+/// 无头自检：只编不引用游戏程序集的那几个文件（文本规则、文本单元、并块拆列），
+/// 用桌面 .NET Framework 直接跑，不需要启动游戏。tests/corpus 里有回放语料时也一起回放（见 Replay）。
 /// 用 tests\test.bat 编译并运行；返回码即失败的用例数。
 /// </summary>
 internal static class HeadlessTests
@@ -12,9 +12,13 @@ internal static class HeadlessTests
     private static int failed;
     private static int passed;
 
-    public static int Main()
+    public static int Main(string[] args)
     {
-        try { Run(); }
+        try
+        {
+            Run();
+            Replay(args.Length > 0 ? args[0] : null);
+        }
         catch (Exception e)
         {
             Console.WriteLine("CRASH " + e.GetType().Name + ": " + e.Message);
@@ -235,9 +239,67 @@ internal static class HeadlessTests
         Check(!TextRules.TrailingPercent("+25%", out label, out value), "只有百分比没有名字不认");
     }
 
+    // ---------------------------------------------------------------- 回放
+
+    /// 回放语料（dev 构建全量导出写的 rows-*.txt，见 RowCorpus）：把每件物品进 Group 的行读回来重跑一遍，
+    /// 结果要和导出时游戏里算的一模一样。语料是游戏的文字，不进仓库；目录不存在就跳过。
+    private static void Replay(string dir)
+    {
+        if (dir == null || !System.IO.Directory.Exists(dir))
+        {
+            Console.WriteLine("replay: no corpus, skipped");
+            return;
+        }
+        string[] files = System.IO.Directory.GetFiles(dir, "rows-*.txt");
+        Array.Sort(files, StringComparer.Ordinal);
+        for (int i = 0; i < files.Length; i++)
+        {
+            RowOptions options;
+            bool cjk;
+            List<RowCorpus.Item> items = RowCorpus.Read(System.IO.File.ReadAllText(files[i]), out options, out cjk);
+            UISettings.Scale = cjk ? 1.2f : 1f;
+            TextUnits.Configure();
+            int same = 0, shown = 0;
+            for (int k = 0; k < items.Count; k++)
+            {
+                RowCorpus.Item item = items[k];
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                string crash = null;
+                try { RowCorpus.Describe(sb, Layout.Group(item.Lines, options)); }
+                catch (Exception e) { crash = e.GetType().Name + ": " + e.Message; }
+                string[] got = sb.ToString().Split(new char[] { (char)10 }, StringSplitOptions.RemoveEmptyEntries);
+                int at = -1;
+                if (crash == null)
+                {
+                    int n = Math.Max(got.Length, item.Expected.Count);
+                    for (int j = 0; j < n && at < 0; j++)
+                        if (j >= got.Length || j >= item.Expected.Count || got[j] != item.Expected[j]) at = j;
+                }
+                if (crash == null && at < 0)
+                {
+                    same++;
+                    passed++;
+                    continue;
+                }
+                failed++;
+                if (shown++ >= 8) continue;
+                Console.WriteLine("FAIL  replay " + System.IO.Path.GetFileName(files[i]) + " " + item.Id);
+                if (crash != null) Console.WriteLine("      " + crash);
+                else
+                {
+                    Console.WriteLine("      expected: " + (at < item.Expected.Count ? item.Expected[at] : "(nothing)"));
+                    Console.WriteLine("      got:      " + (at < got.Length ? got[at] : "(nothing)"));
+                }
+            }
+            Console.WriteLine("replay: {0} {1}/{2} items match", System.IO.Path.GetFileName(files[i]), same, items.Count);
+        }
+        UISettings.Scale = 1f;
+        TextUnits.Configure();
+    }
+
     // ---------------------------------------------------------------- 工具
 
-    /// Seg 带着游戏的调色板类型，离线跑不了，所以直接拼 Unit。
+    /// 直接拼 Unit，不经过 Seg。
     private static List<Unit> Units(string text)
     {
         List<Unit> list = new List<Unit>();

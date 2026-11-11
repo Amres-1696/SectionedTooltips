@@ -35,6 +35,8 @@ namespace SectionedTooltips
         private static readonly StringBuilder Text = new StringBuilder(1 << 20);
         private static readonly List<string> Failed = new List<string>();
         private static readonly List<string> input = new List<string>();
+        /// 并块拆列的回放语料（见 RowCorpus），和 alldump 一起写。
+        private static readonly StringBuilder Rows = new StringBuilder(1 << 20);
         private static string currentId;
 
         /// 每次排版时调用：这种风格还没导出过、又有 flag，就开始导出。
@@ -65,6 +67,7 @@ namespace SectionedTooltips
             System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
             int count = 0;
             Text.Length = 0;
+            Rows.Length = 0;
             Failed.Clear();
             Header(ticket);
             Running = true;
@@ -144,6 +147,10 @@ namespace SectionedTooltips
                 string all = Text.ToString();
                 ModHelper.WriteModDataFileText(ModId, Output, all);
                 ModHelper.WriteModDataFileText(ModId, ticket ? "alldump-ticket.txt" : "alldump-classic.txt", all);
+                // 文件头最后才写：语言模板要等第一次排版才探。
+                StringBuilder head = new StringBuilder();
+                RowCorpus.Header(head, Layout.RowOptionsNow(), TextUnits.CjkLocale);
+                ModHelper.WriteModDataFileText(ModId, ticket ? "rows-ticket.txt" : "rows-classic.txt", head.ToString() + Rows.ToString());
                 SectionedTooltipsMod.Log(string.Format("全量导出完成：{0} 件，{1} 件失败，用时 {2:F1} 秒",
                     count, Failed.Count, watch.Elapsed.TotalSeconds));
             }
@@ -318,11 +325,19 @@ namespace SectionedTooltips
             for (int i = 0; i < lines.Count; i++) input.Add(lines[i].Key + "\t" + Flat(lines[i].Plain));
         }
 
+        /// 由 Layout.Apply 在并块之前调用：记下这件物品进 Group 的行。
+        internal static void GroupInput(List<Line> lines)
+        {
+            RowCorpus.Begin(Rows, currentId ?? "?");
+            RowCorpus.Write(Rows, lines);
+        }
+
         /// 由 Layout.Apply 在算完分节后调用：把这张单子记下来，不画卡片。经典风格时 classic 是它最终的文字。
         internal static void Take(GameItem item, List<Block> blocks, RichTextBuilder classic, LayoutResult classicResult)
         {
             try
             {
+                RowCorpus.Describe(Rows, blocks);
                 // 名字后面跟物品 id：有些物品同名，对比时按 id 配对。
                 Text.Append("=== ").Append(Flat(Name(item))).Append('\t').Append(currentId ?? "?").Append('\n');
                 for (int i = 0; i < input.Count; i++) Text.Append("\t<\t").Append(input[i]).Append('\n');
