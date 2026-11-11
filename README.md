@@ -47,7 +47,13 @@ set CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 | `src/LayoutModel.cs` | 排版的数据：文字段、行、块、排版结果，不引用游戏程序集 |
 | `src/LayoutRows.cs` | 把行并成块、拆成标签/数值/表格；设置从参数进来，可以离线跑 |
 | `src/LayoutClassic.cs` | Classic 风格的文字输出 |
-| `src/Ticket.cs` | 估价单的纸、印章、标题、价格、页脚、文字上色 |
+| `src/Ticket.cs` | 估价单的宿主：显示、隐藏、定位，已建单子的缓存 |
+| `src/TicketBuild.cs` | 建一张单子：构建上下文、把各部分拼成卡片、单子宽度、太高时分栏 |
+| `src/TicketHeader.cs` | 单子上半张：名称、大字价格、价格明细、印章 |
+| `src/TicketTags.cs` | 名字下面的分类标签和它们的颜色 |
+| `src/TicketBody.cs` | 小节以外的部件：图标、内容物格子、描述、页脚 |
+| `src/TicketInk.cs` | 纸色和墨色，带颜色的文字怎么写到纸上 |
+| `src/TicketLog.cs` | 调试：构建耗时、把建好的单子写进日志 |
 | `src/TicketGrid.cs` | 估价单的小节网格：标签列、数值列、进度条、升级、模组效果 |
 | `src/TicketPlan.cs` | 估价单一节的“定型”：每行是升级、效果、基因、词条还是普通的一对，只判一次，画的时候按类型分支 |
 | `src/Contents.cs` | 容器和机器里装了什么、电池和液体的量条 |

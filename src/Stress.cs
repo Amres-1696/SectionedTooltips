@@ -546,19 +546,16 @@ namespace SectionedTooltips
     internal static partial class Ticket
     {
         /// 压力测试：用当前的 tooltip 窗口把排好的用例逐个建成单子、写日志、丢掉，然后照常显示这件物品。
-        private static void RunStress(TMP_Text tmp, GameItemElement item, float room)
+        private static void RunStress(TMP_Text tmp, GameItemElement item, float room, float roomW)
         {
             RectTransform keepCard = card;
             Vector2 keepSize = cardSize;
-            float keepRoom = slipRoom;
-            // 压力测试的单子都按完整的建，收起与否不影响分栏和宽度的检查。
-            buildFull = true;
             Stress.Run(room, delegate(LayoutResult r, float caseRoom, GameItemElement own)
             {
-                slipRoom = caseRoom;
                 try
                 {
-                    BuildFlow(tmp, r, own ?? item);
+                    // 压力测试的单子都按完整的建，收起与否不影响分栏和宽度的检查。
+                    BuildFlow(tmp, r, own ?? item, true, caseRoom, roomW);
                 }
                 finally
                 {
@@ -569,7 +566,6 @@ namespace SectionedTooltips
             });
             card = keepCard;
             cardSize = keepSize;
-            slipRoom = keepRoom;
             // 让下面照常重建（或复用）这件物品自己的单子。
             builtFor = null;
             builtItem = null;
