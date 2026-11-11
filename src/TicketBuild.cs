@@ -455,7 +455,7 @@ namespace SectionedTooltips
             }
             c.LabelCol = LabelColumn(c, r);
             need = Mathf.Max(need, GridWidth(c, r));
-            float min = Mathf.Round(c.M.Line * 11f), max = Mathf.Round(c.M.Line * 17f);
+            float min = Mathf.Round(c.M.Line * 11f), max = Mathf.Round(c.M.Line * 17f + LabelExtra(c));
             float w = Mathf.Clamp(need + 2f * c.Pad, min, max);
             float widest = Mathf.Round(c.M.Line * NameMaxLines);
 

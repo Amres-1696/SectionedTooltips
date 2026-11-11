@@ -20,10 +20,14 @@ namespace SectionedTooltips
         private static float LabelX(Ctx c) { return c.Pad + Indent(c); }
         private static float ValueX(Ctx c) { return c.LabelCol > 0f ? LabelX(c) + c.LabelCol + 2f * c.Gap : LabelX(c); }
 
-        /// 标签超过这么多字符就在列内折行，不再加宽列。
-        private const float LabelChars = 8f;
+        /// 标签超过这么多个字宽就在列内折行，不再加宽列。中文 8 个字；
+        /// 拉丁字母只有半个字宽而单词长（“Appraisal customer chance”25 个字母），按 8 个字宽常用的标签都要折成两行，所以放到 13 个字宽。
+        private const float LabelChars = 8f, LabelCharsLatin = 13f;
 
-        private static float LabelCap(Ctx c) { return RowSize(c) * LabelChars; }
+        private static float LabelCap(Ctx c) { return RowSize(c) * (TextUnits.CjkLocale ? LabelChars : LabelCharsLatin); }
+
+        /// 标签列比中文的上限多出来的宽度：单子的宽度上限跟着放宽这么多，数值列不会因为标签列变宽而被挤窄。
+        private static float LabelExtra(Ctx c) { return Mathf.Max(0f, c.LabelCol - RowSize(c) * LabelChars); }
 
         /// 一对的标签放进标签列。太长放不下的把末尾括号让出去（“去除的污染物（昨夜）”）：括号里的内容挪到数值后面（note），标签不折行。strip 为真时（见 StripsBrackets）所有标签都这么处理，不管长短。
         private static string PairLabel(Ctx c, Row row, bool strip, out string note)
