@@ -84,6 +84,11 @@ namespace SectionedTooltips
         internal static ConfigEntry<bool> FractionBars;
         internal static ConfigEntry<bool> LiquidPanel;
         internal static ConfigEntry<bool> ContentsPanel;
+        internal static ConfigEntry<string> ContentsLayout;
+        /// 内容物的两种显示方式，原样显示在设置菜单里。
+        internal static readonly string[] ContentsLayouts = { "装箱单 Packing list", "格子 Grid" };
+        /// 内容物列在订在旁边的装箱单上（默认）；否则照旧画成单子里的格子。
+        internal static bool PackingList { get { return ContentsLayout == null || ContentsLayout.Value != ContentsLayouts[1]; } }
         internal static ConfigEntry<string> Paper;
         internal static ConfigEntry<string> NotOwnedPaper;
         internal static ConfigEntry<int> Scale;
@@ -169,6 +174,7 @@ namespace SectionedTooltips
             Bars = cfg.Define("GraphicBars", true, content, Text("cfg_bars"), Text("cfg_bars_tip"), false);
             FractionBars = cfg.Define("FractionBars", true, content, Text("cfg_fraction_bars"), Text("cfg_fraction_bars_tip"), false);
             ContentsPanel = cfg.Define("ContentsPanel", true, content, Text("cfg_contents_panel"), Text("cfg_contents_panel_tip"), false);
+            ContentsLayout = cfg.Define("ContentsLayout", ContentsLayouts[0], content, Text("cfg_contents_layout"), ContentsLayouts, Text("cfg_contents_layout_tip"), false);
             ContentRows = Number(cfg, "ContentRows", 2, content, "cfg_content_rows", 1, 6);
             ShowPriceDetails = cfg.Define("ShowPriceDetails", true, content, Text("cfg_show_prices"), Text("cfg_show_prices_tip"), false);
             ShowDescription = cfg.Define("ShowDescription", true, content, Text("cfg_show_desc"), Text("cfg_show_desc_tip"), false);
@@ -205,6 +211,7 @@ namespace SectionedTooltips
             FractionBars.OnChanged += delegate { Version++; };
             LiquidPanel.OnChanged += delegate { Version++; };
             ContentsPanel.OnChanged += delegate { Version++; };
+            ContentsLayout.OnChanged += delegate { Version++; };
             Paper.OnChanged += delegate { Version++; };
             NotOwnedPaper.OnChanged += delegate { Version++; };
             Scale.OnChanged += delegate { Version++; };

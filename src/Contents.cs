@@ -51,6 +51,8 @@ namespace SectionedTooltips
         /// 所有分组的量条。
         public readonly List<Gauge> Gauges = new List<Gauge>();
         public int Total;
+        /// 扩建后有几个标签页的储藏区：现在显示的是第几页（从 1 起）、一共几页；只有一页时都是 0。
+        public int Page, Pages;
 
         // 不是玩家填的储物面板：模组槽和备注槽。电池面板只用来读量条。
         private static readonly string[] SkippedRoles = { "module", "note" };
@@ -104,7 +106,8 @@ namespace SectionedTooltips
                         if (panel == null || panel.isHidden || Array.IndexOf(SkippedRoles, panel.role ?? "") >= 0) continue;
                         bool power = panel.role == PowerRole;
                         if (power && !machine) continue;
-                        List<GameItem> items = ItemsIn(panel.content, false);
+                        // 储藏区扩建后面板里是几个标签页：只取当前选中的那页，和玩家打开窗口看到的一样。机器照旧全取。
+                        List<GameItem> items = ItemsIn(panel.content, false, !machine);
                         if (power) powered = true;
                         if (items.Count == 0) continue;
                         if (machine) list.Add(new Part { Label = LabelOf(panel), Items = items, Power = power, Gauged = true });
@@ -122,7 +125,7 @@ namespace SectionedTooltips
                 else
                 {
                     // 只取储物（可能是几个网格，比如金库）：不包括武器的弹匣槽。
-                    List<GameItem> items = ItemsIn(root, true);
+                    List<GameItem> items = ItemsIn(root, true, !item.IsGameItemType("MACHINE"));
                     if (items.Count == 0)
                     {
                         GameGridInventory inv = window.child as GameGridInventory;
@@ -136,10 +139,14 @@ namespace SectionedTooltips
             catch { return null; }
         }
 
-        /// element 下面的物品；gridsOnly 时只有全都是网格才返回。
-        private static List<GameItem> ItemsIn(PixelElement element, bool gridsOnly)
+        /// element 下面的物品；gridsOnly 时只有全都是网格才返回；selectedTab 时有标签页的只取当前页。
+        private static List<GameItem> ItemsIn(PixelElement element, bool gridsOnly, bool selectedTab)
         {
             List<GameItem> items = new List<GameItem>();
+            if (element == null) return items;
+            // 游戏的 CollectSelectedTabStorage 遇到普通网格什么都不收，所以只在是标签页时自己换成当前页。
+            MachineryTabs tabs = selectedTab ? element as MachineryTabs : null;
+            if (tabs != null) element = tabs.GetPage(tabs.selected);
             if (element == null) return items;
             List<GraphNodeStorage> storages = MachineryContainerUtils.Collect(element);
             if (storages == null) return items;
@@ -193,9 +200,12 @@ namespace SectionedTooltips
         {
             List<Part> parts = Compartments(item);
             if (parts == null) return 0;
+            int page, pages;
+            PageOf(item, out page, out pages);
             unchecked
             {
-                int h = 17;
+                // 换页时就算两页装的一样，页码也要跟着变。
+                int h = 17 + page * 7919;
                 for (int p = 0; p < parts.Count; p++)
                 {
                     List<GameItem> items = parts[p].Items;
@@ -231,11 +241,39 @@ namespace SectionedTooltips
             return r;
         }
 
+        /// 储藏区扩建后的标签页：选中的是第几页（从 0 起）、一共几页。机器和没有标签页的容器返回 false。
+        private static bool PageOf(GameItem item, out int page, out int pages)
+        {
+            page = pages = 0;
+            try
+            {
+                if (item == null || item.IsGameItemType("MACHINE")) return false;
+                PixelWindow window = item.contentWindow;
+                PixelElement root = window != null ? window.childElement : null;
+                MachineryTabs tabs = root as MachineryTabs;
+                MachineryPanelRow row = root as MachineryPanelRow;
+                if (tabs == null && row != null && row.Panels != null)
+                    for (int i = 0; i < row.Panels.Count && tabs == null; i++)
+                        if (row.Panels[i] != null && !row.Panels[i].isHidden) tabs = row.Panels[i].content as MachineryTabs;
+                if (tabs == null || tabs.count < 2) return false;
+                page = tabs.selected;
+                pages = tabs.count;
+                return true;
+            }
+            catch { return false; }
+        }
+
         private static ContentsInfo CollectNow(GameItem item)
         {
             List<Part> parts = Compartments(item);
             if (parts == null) return null;
             ContentsInfo r = new ContentsInfo();
+            int page, pages;
+            if (PageOf(item, out page, out pages))
+            {
+                r.Page = page + 1;
+                r.Pages = pages;
+            }
             Dictionary<string, ContentEntry> merged = new Dictionary<string, ContentEntry>();
             for (int p = 0; p < parts.Count; p++)
             {

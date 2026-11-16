@@ -13,7 +13,7 @@ namespace SectionedTooltips
     internal static partial class Ticket
     {
         // 纸的颜色；UsePaper 每次构建时切换。深色纸上墨是浅的。
-        private static Color Paper, PaperShade, PaperEdge, InkSoft, Ink, StampRed;
+        private static Color Paper, PaperShade, PaperEdge, InkSoft, Ink, FlagRed;
         private static bool darkPaper;
 
         /// 两个纸色设置的可选项，原样显示在设置菜单里。
@@ -56,37 +56,65 @@ namespace SectionedTooltips
             InkSoft = Papers[i][3];
             Ink = Papers[i][4];
             darkPaper = Paper.grayscale < 0.4f;
-            // 印章那点暗红在深色纸上会看不出来：深色纸上用亮一点的。
-            StampRed = darkPaper ? (Color)new Color32(226, 104, 86, 220) : (Color)new Color32(158, 60, 50, 200);
+            inks.Clear();
+            // 赃物、违禁品标签和红边的那点暗红在深色纸上会看不出来：深色纸上用亮一点的。
+            FlagRed = darkPaper ? (Color)new Color32(226, 104, 86, 220) : (Color)new Color32(158, 60, 50, 200);
         }
 
-        /// 把游戏的调色板颜色转成纸上的墨：同样的色相压暗（深色纸上提亮、略淡一点）；灰色改用纸自己的墨。
+        /// 把游戏的调色板颜色转成纸上的墨（见下面的 InkOf(Color, Color)）；灰色改用纸自己的墨。
         private static Color InkOf(Palette p, Color fallback)
         {
             if (p == Palette.None) return fallback;
             return InkOf(Overlay.ToColor(p, Palette.Gray), fallback);
         }
 
-        /// 任意颜色调到纸上：保留色相，按纸色压暗或提亮；太灰的用 fallback。
+        /// 任意颜色调到纸上：保留色相、颜色要鲜，亮度取和纸刚好够对比度的那一档（浅纸上从亮往暗找，深纸上从暗往亮找）。
+        /// 以前一律压到同一个暗度，橙色、黄色在米黄纸上都成了发闷的棕色，看不出是彩色。太灰的用 fallback。
         private static Color InkOf(Color c, Color fallback)
         {
             float h, s, v;
             Color.RGBToHSV(c, out h, out s, out v);
             if (s < 0.25f) return fallback;
-            Color k = darkPaper
-                ? Color.HSVToRGB(h, Mathf.Clamp01(s * 0.55f + 0.1f), 0.88f)
-                : Color.HSVToRGB(h, Mathf.Clamp01(s * 0.8f + 0.2f), 0.45f);
+            // Color32 没有自己的 GetHashCode，默认的按字段异或会把红色通道抵消掉：只差红色的两个颜色会共用一个墨色。自己按 r、g、b 打包。
+            Color32 c32 = c;
+            int key = c32.r | (c32.g << 8) | (c32.b << 16);
+            Color k;
+            if (inks.TryGetValue(key, out k)) return k;
+            float sat = darkPaper ? Mathf.Clamp01(Mathf.Max(s, 0.6f) * 0.75f) : Mathf.Clamp01(Mathf.Max(s, 0.75f));
+            k = Color.HSVToRGB(h, sat, darkPaper ? 1f : 0.2f);
+            for (int i = 0; i <= 40; i++)
+            {
+                float val = darkPaper ? 0.45f + i * 0.0137f : 0.95f - i * 0.0187f;
+                Color t = Color.HSVToRGB(h, sat, val);
+                if (Contrast(t, Paper) >= InkContrast) { k = t; break; }
+            }
             k.a = 1f;
+            inks[key] = k;
             return k;
         }
 
-        private static string InkRich(List<Seg> segs, Color baseInk)
+        /// 彩色墨和纸的对比度：够读，又不至于压成黑色。
+        private const float InkContrast = 4f;
+        private static readonly Dictionary<int, Color> inks = new Dictionary<int, Color>();
+
+        private static float Contrast(Color a, Color b)
         {
-            return InkRich(segs, baseInk, true);
+            float la = Luminance(a), lb = Luminance(b);
+            return (Mathf.Max(la, lb) + 0.05f) / (Mathf.Min(la, lb) + 0.05f);
         }
 
-        /// segs 转成墨色的富文本；keepColors 关掉时全部用 baseInk。
-        private static string InkRich(List<Seg> segs, Color baseInk, bool keepColors)
+        private static float Luminance(Color c)
+        {
+            return 0.2126f * Linear(c.r) + 0.7152f * Linear(c.g) + 0.0722f * Linear(c.b);
+        }
+
+        private static float Linear(float x)
+        {
+            return x <= 0.04045f ? x / 12.92f : Mathf.Pow((x + 0.055f) / 1.055f, 2.4f);
+        }
+
+        /// segs 转成墨色的富文本：保留游戏和其他模组（如 Item Details）给的颜色，调到纸上看得清的深浅；没颜色、太灰的用 baseInk。
+        private static string InkRich(List<Seg> segs, Color baseInk)
         {
             if (segs == null) return "";
             StringBuilder sb = new StringBuilder();
@@ -94,7 +122,7 @@ namespace SectionedTooltips
             {
                 Seg s = segs[i];
                 if (Drawn(s) || string.IsNullOrEmpty(s.Text)) continue;
-                Color ink = keepColors ? InkOf(s.Color, baseInk) : baseInk;
+                Color ink = InkOf(s.Color, baseInk);
                 sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGB(ink)).Append('>');
                 if (s.Bold) sb.Append("<b>");
                 sb.Append(s.Text);

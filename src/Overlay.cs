@@ -67,8 +67,39 @@ namespace SectionedTooltips
                 pendingText = text;
                 pendingResult = Layout.LastResult;
                 pendingItem = item;
+                if (!Settings.IsTicket && Settings.On(Settings.Enabled) && !Fuse.IsOpen(Fuse.LayoutKey)) EvenLines(text);
             }
             else pendingText = null;
+        }
+
+        /// 经典风格的分节底条画在单独一层文字上（RichTextElement 的 textBackgroundNode），和正文各排各的行。
+        /// 正文某行有回退字体里的字（俄文字母、部分符号）时那一行会变高，底色层那一行不会，往下就越错越多。
+        /// 几层都固定成主字体的行高，行就一一对上。
+        private const string EvenLine = "<line-height=100%>";
+
+        private static void EvenLines(RichText t)
+        {
+            try
+            {
+                if (layerSetters == null)
+                {
+                    string[] names = { "richTextForeground", "richTextBackground", "richTextUnderline", "richTextStrikethrough" };
+                    layerSetters = new MethodInfo[names.Length];
+                    for (int i = 0; i < names.Length; i++) layerSetters[i] = AccessTools.PropertySetter(typeof(RichText), names[i]);
+                }
+                string[] now = { t.richTextForeground, t.richTextBackground, t.richTextUnderline, t.richTextStrikethrough };
+                for (int i = 0; i < layerSetters.Length; i++)
+                    if (layerSetters[i] != null) layerSetters[i].Invoke(t, new object[] { Even(now[i]) });
+            }
+            catch { }
+        }
+
+        /// RichText 四层文字的 setter 是私有的。
+        private static MethodInfo[] layerSetters;
+
+        private static string Even(string s)
+        {
+            return string.IsNullOrEmpty(s) || s.StartsWith(EvenLine, StringComparison.Ordinal) ? s : EvenLine + s;
         }
 
         internal static void OnShow(OverlayHandler handler, RichText text)

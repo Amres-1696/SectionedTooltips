@@ -69,7 +69,7 @@ namespace SectionedTooltips
         }
 
         /// 小节标题用它自己的墨色，下面一条细线横过单子。（以前标题后面垫一块实色，比下面的内容还抢眼。）
-        /// 分节标题：全都用正文的墨色，下面一道纸边色的细线。颜色只留给数据本身（盈亏、成分、市场事件）和印章。
+        /// 分节标题：全都用正文的墨色，下面一道纸边色的细线。颜色只留给数据本身（盈亏、成分、市场事件）和赃物、违禁品标签。
         private static float SectionHeader(Ctx c, string title, float y)
         {
             y += c.Gap * 1.5f;
@@ -87,7 +87,7 @@ namespace SectionedTooltips
             float inner = c.W - c.Pad - left;
             if (row.Heading)
             {
-                TextMeshProUGUI h = Text(c, c.F * 0.8f, InkRich(row.Label, InkSoft, false), Color.white, inner);
+                TextMeshProUGUI h = Text(c, c.F * 0.8f, InkRich(row.Label, InkSoft), Color.white, inner);
                 Ui.Move(h.rectTransform, left, y);
                 return y + h.rectTransform.sizeDelta.y;
             }
@@ -120,7 +120,7 @@ namespace SectionedTooltips
             // 标签用棕色的墨，只有小节标题带颜色；数值保留自己的颜色。比单子还宽的标签或数值（标签上的“受日用品救济行动影响，……(-40%)”）折行而不是压出边；这时数值接在标签下面一行。
             BarMark vbar = BarOf(row.Value);
             float barW = vbar != null ? BarWidth(c) + c.Gap : 0f;
-            string labelRich = InkRich(row.Label, InkSoft, false), valueRich = InkRich(row.Value, Ink);
+            string labelRich = InkRich(row.Label, InkSoft), valueRich = InkRich(row.Value, Ink);
             TextMeshProUGUI label = Text(c, size, labelRich, Color.white, c.Measure(labelRich, size) > inner ? inner : 0f);
             TextMeshProUGUI value = Text(c, size, valueRich, Color.white, c.Measure(valueRich, size) > inner - barW ? inner - barW : 0f);
             Vector2 ls = label.rectTransform.sizeDelta, vs = value.rectTransform.sizeDelta;

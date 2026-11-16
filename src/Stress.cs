@@ -564,6 +564,7 @@ namespace SectionedTooltips
         {
             RectTransform keepCard = card;
             Vector2 keepSize = cardSize;
+            PackSlip keepPack = pack;
             Stress.Run(room, delegate(LayoutResult r, float caseRoom, GameItemElement own)
             {
                 try
@@ -580,6 +581,7 @@ namespace SectionedTooltips
             });
             card = keepCard;
             cardSize = keepSize;
+            pack = keepPack;
             // 让下面照常重建（或复用）这件物品自己的单子。
             builtFor = null;
             builtItem = null;
