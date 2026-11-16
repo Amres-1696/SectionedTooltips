@@ -32,6 +32,8 @@ namespace SectionedTooltips
             public Vector2 Size;
             /// 完整的单子（展开键按着，或者没开收起）。
             public bool Full;
+            /// 订在旁边的装箱单（卡片的子物体），见 TicketPacking；没有为 null。
+            public PackSlip Pack;
         }
 
         private const int KeptSlips = 8;
@@ -164,13 +166,18 @@ namespace SectionedTooltips
             float sx = Mathf.Abs(root.localScale.x), sy = Mathf.Abs(root.localScale.y);
             float w = cardSize.x * sx, h = cardSize.y * sy;
             Rect screen = Panels.ScreenRect(parent, win);
+            // 装箱单伸出单子的宽度，以及连同装箱单的总高度（root 单位）。
+            float k = card != null ? Mathf.Abs(card.localScale.x) : 1f;
+            float pw = pack != null ? pack.Out * k * sx : 0f;
+            if (pack != null) h = Mathf.Max(h, (pack.Top + pack.H) * k * sy);
             // 钉在游戏窗口离鼠标最近的那个角，这样比窗口小（或大）的估价单也贴着鼠标，而不是贴着窗口另一边。
             float x = bl.x, y = tr.y;
+            bool mouseRight = false;
             if (Overlay.Cursor.HasValue)
             {
                 Vector2 c = Overlay.Cursor.Value;
                 Vector3 m = parent.InverseTransformPoint(new Vector3(c.x, c.y, 0f));
-                if (m.x > (bl.x + tr.x) / 2f) x = tr.x - w;
+                if (m.x > (bl.x + tr.x) / 2f) { x = tr.x - w; mouseRight = true; }
                 if (m.y < (bl.y + tr.y) / 2f) y = bl.y + h;
             }
             // 估价单上方留给 Item Details 的分类标签（它自己贴在锚点上方，这里只留高度）。
@@ -181,9 +188,18 @@ namespace SectionedTooltips
                 float ps = Mathf.Abs(parent.lossyScale.y), ws = Mathf.Abs(win.lossyScale.y);
                 if (ps > 0f && ws > 0f) above = (badge.rect.height + BadgeGap) * ws / ps;
             }
-            if (x + w > screen.xMax) x = screen.xMax - w;
-            if (x < screen.xMin) x = screen.xMin;
+            // 装箱单挂在离鼠标远的那一边，不盖住鼠标和正在看的物品；那边放不下就换另一边，两边都放不下时整组往里挪。
+            bool right = !mouseRight;
+            if (pack != null)
+            {
+                if (right && x + w + pw > screen.xMax && x - pw >= screen.xMin) right = false;
+                else if (!right && x - pw < screen.xMin && x + w + pw <= screen.xMax) right = true;
+            }
+            float rightW = right ? pw : 0f, leftW = right ? 0f : pw;
+            if (x + w + rightW > screen.xMax) x = screen.xMax - w - rightW;
+            if (x - leftW < screen.xMin) x = screen.xMin + leftW;
             if (y - h < screen.yMin) y = screen.yMin + h;
+            PlacePacking(right);
             if (y + above > screen.yMax) y = screen.yMax - above;
             root.localPosition = new Vector3(Mathf.Round(x), Mathf.Round(y), 0f);
         }
@@ -221,6 +237,7 @@ namespace SectionedTooltips
                 builtFor = s.For;
                 builtItem = s.Item;
                 builtFull = s.Full;
+                pack = s.Pack;
                 card.gameObject.SetActive(true);
                 return true;
             }
@@ -251,6 +268,7 @@ namespace SectionedTooltips
             {
                 Drop(card);
                 card = null;
+                pack = null;
                 builtFor = null;
                 builtItem = null;
                 failedFor = r;
@@ -283,6 +301,7 @@ namespace SectionedTooltips
             b.Card = card;
             b.Size = cardSize;
             b.Full = builtFull;
+            b.Pack = pack;
             slips.Insert(0, b);
         }
     }

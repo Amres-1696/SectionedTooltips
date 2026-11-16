@@ -33,7 +33,7 @@ namespace SectionedTooltips
         private static string PairLabel(Ctx c, Row row, bool strip, out string note)
         {
             note = "";
-            string rich = InkRich(row.Label, InkSoft, false);
+            string rich = InkRich(row.Label, InkSoft);
             if (!strip && c.Measure(rich, RowSize(c)) <= LabelCap(c)) return rich;
             string plain = TextUnits.Plain(row.Label).Trim();
             int open = TextRules.TrailingGroup(plain);
@@ -49,7 +49,7 @@ namespace SectionedTooltips
             {
                 Row row = bl.Rows[i];
                 if (!row.IsPair || UpgradeOf(row) != null || EffectOf(row) != null) continue;
-                if (c.Measure(InkRich(row.Label, InkSoft, false), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(TextUnits.Plain(row.Label).Trim()) > 0) return true;
+                if (c.Measure(InkRich(row.Label, InkSoft), RowSize(c)) > LabelCap(c) && TextRules.TrailingGroup(TextUnits.Plain(row.Label).Trim()) > 0) return true;
             }
             return false;
         }
@@ -122,13 +122,10 @@ namespace SectionedTooltips
             return sb.ToString();
         }
 
-        /// 数值的墨色。游戏几乎给每个数值都上了色，颜色反而没信息量：数值统一用墨色，只留红、橙、黄（少、低、快坏了）让它们显出来。
+        /// 数值的墨色：保留游戏和其他模组给的颜色（液体成分各有各的颜色），调到纸上的深浅。
         private static Color ValueInk(Palette p)
         {
-            if (p == Palette.None) return Ink;
-            float h, s, v;
-            Color.RGBToHSV(Overlay.ToColor(p, Palette.Gray), out h, out s, out v);
-            return s >= 0.25f && (h < 0.17f || h > 0.94f) ? InkOf(p, Ink) : Ink;
+            return InkOf(p, Ink);
         }
 
         /// 由多种颜色组成的数值，各部分按自己的 ValueInk。
@@ -241,11 +238,11 @@ namespace SectionedTooltips
                 Row row = item.Row;
                 // 单子太高时每行另起一块，可以断到下一栏；小标题和它管着的行不拆开。
                 if (item.Break) Split(c, y);
-                string label = item.Label != null ? InkRich(item.Label.Label, InkSoft, false) : "";
+                string label = item.Label != null ? InkRich(item.Label.Label, InkSoft) : "";
                 switch (item.Kind)
                 {
                     case ItemKind.HeadingLine:
-                        y = GridLine(c, row != null ? InkRich(row.Label, InkSoft, false) : "", y);
+                        y = GridLine(c, row != null ? InkRich(row.Label, InkSoft) : "", y);
                         break;
                     case ItemKind.ModuleAffix:
                         if (item.Rule)
@@ -255,7 +252,7 @@ namespace SectionedTooltips
                             y += c.U + c.Gap;
                         }
                         else if (item.Gap) y += c.Gap * 0.5f;
-                        y += GridText(c, InkRich(row.Segs, item.Name ? Ink : InkSoft, item.Name), item.Name ? RowSize(c) : c.F * 0.8f, left, y) + RowGap(c);
+                        y += GridText(c, InkRich(row.Segs, item.Name ? Ink : InkSoft), item.Name ? RowSize(c) : c.F * 0.8f, left, y) + RowGap(c);
                         break;
                     case ItemKind.Upgrade:
                         y = UpgradeRow(c, item.Upgrade, Tint(item.Upgrade.Name, InkSoft), y);
@@ -320,7 +317,7 @@ namespace SectionedTooltips
             Vector2 vs = value.rectTransform.sizeDelta;
             Ui.Move(value.rectTransform, right - vs.x, y);
             float room = right - vs.x - c.Gap - LabelX(c);
-            float h = Mathf.Max(lh, GridText(c, InkRich(row.Label, InkSoft, false), size, LabelX(c), y,
+            float h = Mathf.Max(lh, GridText(c, InkRich(row.Label, InkSoft), size, LabelX(c), y,
                 LabelX(c) + Mathf.Max(room, size)));
             return y + Mathf.Max(h, vs.y) + RowGap(c);
         }
@@ -449,7 +446,7 @@ namespace SectionedTooltips
         /// 液体表里的一格：名称用标签的淡墨，数字用墨色，都不加粗（和其他节的“标签 数值”一样）。
         private static string CellRich(List<Seg> cell, bool name)
         {
-            string rich = name ? InkRich(cell, InkSoft, false) : ValueInks(cell);
+            string rich = name ? InkRich(cell, InkSoft) : ValueInks(cell);
             return rich.Replace("<b>", "").Replace("</b>", "");
         }
 
@@ -655,7 +652,7 @@ namespace SectionedTooltips
             for (int i = 0; i < rows.Count; i++)
             {
                 Gene g = genes[i];
-                float h = Mathf.Max(lh, GridLabel(c, InkRich(rows[i].Label, InkSoft, false), y));
+                float h = Mathf.Max(lh, GridLabel(c, InkRich(rows[i].Label, InkSoft), y));
                 h = Mathf.Max(h, RightText(c, g.Value, size, ToneInk(g.ValueTone, Ink), cols.RightValue(x), y));
                 h = Mathf.Max(h, Allele(c, g.A, g.ToneA, cols, cols.RightA(x), y, lh));
                 h = Mathf.Max(h, Allele(c, g.B, g.ToneB, cols, cols.RightB(x), y, lh));
@@ -975,7 +972,7 @@ namespace SectionedTooltips
 
         private static string ChipText(Effect e)
         {
-            return e.Name + " " + (e.Negative ? Tint(e.Percent, StampRed) : e.Percent);
+            return e.Name + " " + (e.Negative ? Tint(e.Percent, FlagRed) : e.Percent);
         }
 
         private static float EffectChipWidth(Ctx c, Effect e)
@@ -1160,14 +1157,14 @@ namespace SectionedTooltips
                     string note;
                     // 借来的小标题写在标签列里；单独占一行的（HeadingLine）不用撑宽标签列。
                     if (item.Label != null && (item.Kind != ItemKind.WeaponAffix || plan.Labelled))
-                        w = Mathf.Max(w, c.Measure(InkRich(item.Label.Label, InkSoft, false), size));
+                        w = Mathf.Max(w, c.Measure(InkRich(item.Label.Label, InkSoft), size));
                     switch (item.Kind)
                     {
                         case ItemKind.Upgrade:
                             w = Mathf.Max(w, c.Measure(item.Upgrade.Name, size));
                             break;
                         case ItemKind.Genes:
-                            for (int k = 0; k < item.Rows.Count; k++) w = Mathf.Max(w, c.Measure(InkRich(item.Rows[k].Label, InkSoft, false), size));
+                            for (int k = 0; k < item.Rows.Count; k++) w = Mathf.Max(w, c.Measure(InkRich(item.Rows[k].Label, InkSoft), size));
                             break;
                         case ItemKind.Pair:
                             w = Mathf.Max(w, c.Measure(PairLabel(c, item.Row, strip, out note), size));
@@ -1178,8 +1175,11 @@ namespace SectionedTooltips
                     }
                 }
             }
+            // 内容物只量画在单子里的分组：装箱单模式和收起时，物品去了装箱单或收起来了，单子里只剩量条。
+            bool gaugesOnly = c.FoldContents || Settings.PackingList;
             if (r.Contents != null)
-                for (int g = 0; g < r.Contents.Groups.Count; g++) w = Mathf.Max(w, c.Measure(GroupLabel(r.Contents.Groups[g]), size));
+                for (int g = 0; g < r.Contents.Groups.Count; g++)
+                    if (!gaugesOnly || r.Contents.Groups[g].Gauges.Count > 0) w = Mathf.Max(w, c.Measure(GroupLabel(r.Contents.Groups[g]), size));
             return Mathf.Ceil(Mathf.Min(w, LabelCap(c)));
         }
 
@@ -1200,7 +1200,7 @@ namespace SectionedTooltips
                     switch (item.Kind)
                     {
                         case ItemKind.Wide:
-                            value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft, false), size)
+                            value = Mathf.Max(value, c.Measure(InkRich(row.Label, InkSoft), size)
                                 + c.Gap + c.Measure(InkRich(row.Value, Ink), size));
                             break;
                         case ItemKind.Upgrade:

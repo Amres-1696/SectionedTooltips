@@ -141,11 +141,11 @@ namespace SectionedTooltips
             Image paper = Ui.NewImage(c.Card, Paper);
             c.Q = Ui.NewQuads(c.Card);
 
-            // 一张单子能显示的东西全放上去：多种颜色的标签、赃物标签、违禁品印章、价格、一节内容、电池量条、描述和页脚。
+            // 一张单子能显示的东西全放上去：多种颜色的标签、赃物标签、违禁品标签和红边、价格、一节内容、电池量条、描述和页脚。
             string name = SectionedTooltipsMod.L("sample_name");
             string price = "1478";
             string stolen = SectionedTooltipsMod.L("sample_stolen");
-            string stamp = SectionedTooltipsMod.L("sample_stamp");
+            string contraband = SectionedTooltipsMod.L("sample_contraband");
             List<Chip> kinds = new List<Chip>();
             kinds.Add(SampleChip("MACHINE", "sample_tags"));
             kinds.Add(SampleChip("HOUSEHOLD_GOOD", "sample_tag_household"));
@@ -185,9 +185,10 @@ namespace SectionedTooltips
             float iconW = look.Icon ? IconBox(c) + c.Gap * 1.5f : 0f;
             float need = c.Measure("<b>" + name + "</b>", c.F * 1.15f) + iconW;
             need = Mathf.Max(need, ChipsWidth(c, kinds) + iconW);
-            need = Mathf.Max(need, c.Measure(StolenLabel(stolen), c.F * 0.75f) + 6f * c.U + iconW);
+            List<string> flags = new List<string> { stolen, contraband };
+            need = Mathf.Max(need, FlagsWidth(c, flags) + iconW);
             need = Mathf.Max(need, c.Measure(SectionedTooltipsMod.L("sample_price"), c.F * 0.75f) + c.Gap
-                + c.Measure("<b>" + price + "</b>", PriceSize(c)) + 2f * c.Gap + StampSpan(c, stamp));
+                + c.Measure("<b>" + price + "</b>", PriceSize(c)));
             need = Mathf.Max(need, c.Measure(Sections.TitleOf(Sections.Machine), c.F * 0.85f) + 4f * c.M.Line);
             c.LabelCol = LabelColumn(c, r);
             need = Mathf.Max(need, GridWidth(c, r));
@@ -221,12 +222,11 @@ namespace SectionedTooltips
                 ty += t.rectTransform.sizeDelta.y;
             }
             ty = DrawChips(c, kinds, tx, ty, wrap);
-            ty = StolenTag(c, stolen, tx, ty);
+            ty = FlagTags(c, flags, tx, ty, wrap);
             y = Mathf.Max(y + (look.Icon ? box : 0f), ty) + c.Gap * 1.5f;
 
             // 大字价格、价格明细和各节，和真实单子用同一套代码。
-            float stampY = y;
-            y = Price(c, p, y, stampY + StampDrop(c, stamp, 0) + c.Gap);
+            y = Price(c, p, y);
             y = Section(c, machine, y);
             if (r.Contents != null) y = Contents(c, r.Contents, y);
 
@@ -241,13 +241,12 @@ namespace SectionedTooltips
             Dashes(c, c.Pad * 0.5f, y - c.Pad * 0.5f, c.W - c.Pad, 3f * c.U, 2f * c.U, c.U, PaperEdge);
 
             float h = Mathf.Round(y);
+            ContrabandEdge(c, h);
             Ui.Place(shadow, 2f * c.U, 2f * c.U, c.W, h);
             Ui.Place(edge, 0f, 0f, c.W, h);
             Ui.Place(paper, c.U, c.U, c.W - 2f * c.U, h - 2f * c.U);
             Ui.Place(c.Q, 0f, 0f, c.W, h);
             Ui.Place(c.Card, x, yTop, c.W, h);
-            // 最后画，盖在纸和价格行上面。
-            Stamp(c, stamp, stampY, 0);
             Object.Destroy(c.Scratch.gameObject);
             return new Vector2(c.W, h);
         }

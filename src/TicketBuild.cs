@@ -235,6 +235,7 @@ namespace SectionedTooltips
             // 上一张卡片留着，只是隐藏，鼠标回到它的物品时直接用。
             if (card != null) card.gameObject.SetActive(false);
             builtFor = source;
+            pack = null;
             builtItem = item;
             builtFull = full;
             lastBuildFrame = Time.frameCount;
@@ -300,11 +301,8 @@ namespace SectionedTooltips
             float y = c.Pad;
             y = Title(c, p, item, y);
             Step("title");
-            // 印章放在大字价格旁边，那里是空的；下面的行从最低的印章下面开始。
-            float stampY = y;
-            float clear = y;
-            for (int i = 0; i < p.Stamps.Count; i++) clear = Mathf.Max(clear, stampY + StampDrop(c, p.Stamps[i], i) + c.Gap);
-            y = Price(c, p, y, clear);
+            y = Price(c, p, y);
+            float bodyTop = y;
             Step("price");
             // 每一节各占一块，单子太高时整块挪到右边新的一栏。开放式的小节（其他模组的信息、游戏的“其他”行）按顺序放在第一个这种块原来的位置，
             // 它们太多时自己单独起一栏。
@@ -344,11 +342,20 @@ namespace SectionedTooltips
             }
             Step("sections");
             ContentsInfo inside = r.Contents != null && r.Contents.Entries.Count > 0 ? r.Contents : null;
+            // 物品列在订在旁边的装箱单上（见 TicketPacking）；电池、水箱这类量条是读数，留在单子里。
+            // 收起时没有装箱单，单子里留着“内容物 20”的标题，装着多少东西还看得到。
+            // 设置里选了“格子”就照旧把物品格子画在单子里。
+            ContentsInfo packed = null;
             if (inside != null && c.FoldContents)
             {
-                // 收起的是物品格子；电池、水箱这类量条是读数，留着。
                 Folded(c, "fold_contents");
                 inside = GaugesOnly(inside);
+            }
+            else if (inside != null && Settings.PackingList)
+            {
+                packed = inside;
+                inside = GaugesOnly(inside);
+                if (inside.Groups.Count == 0) inside = null;
             }
             if (inside != null)
             {
@@ -394,6 +401,7 @@ namespace SectionedTooltips
             }
             Dashes(c, c.Pad * 0.5f, c.Pad * 0.5f, w - c.Pad, 3f * c.U, 2f * c.U, c.U, PaperEdge);
             Dashes(c, c.Pad * 0.5f, h - c.Pad * 0.5f, w - c.Pad, 3f * c.U, 2f * c.U, c.U, PaperEdge);
+            if (p.Contraband.Count > 0) ContrabandEdge(c, h);
 
             Ui.Place(shadow, 2f * c.U, 2f * c.U, w, h);
             Ui.Place(edge, 0f, 0f, w, h);
@@ -405,14 +413,14 @@ namespace SectionedTooltips
                 if (q != null) Ui.Place(q, 0f, 0f, w, h);
             }
             Ui.Place(card, 0f, 0f, w, h);
-            // 栏太多、比窗口还宽：整张按比例缩小，宁可字小一点也不能有一截跑到屏幕外。
-            float fit = w > roomW ? roomW / w : 1f;
+            Packing(c, packed, w, bodyTop);
+            // 栏太多、比窗口还宽（连同伸出去的装箱单）：整张按比例缩小，宁可字小一点也不能有一截跑到屏幕外。
+            float span = w + (pack != null ? pack.Out : 0f);
+            float fit = span > roomW ? roomW / span : 1f;
             card.localScale = new Vector3(fit / lift, fit / lift, 1f);
             c.Fit = fit;
             cardSize = new Vector2(w * fit / lift, h * fit / lift);
 
-            // 印章最后画，盖在纸和价格行上面。
-            for (int i = 0; i < p.Stamps.Count; i++) Stamp(c, p.Stamps[i], stampY, i);
             // 改不透明度会加 Settings.Version，所以存着的估价单一定是当前这个值。
             float opacity = Settings.OpacityFactor;
             if (opacity < 1f)
@@ -466,19 +474,18 @@ namespace SectionedTooltips
                 float lead = (IconFor(item) != null ? IconBox(c) + c.Gap * 1.5f : 0f) + c.U + 2f * c.Pad;
                 float extra = 0f;
                 for (int i = 0; i < p.Extras.Count; i++)
-                    extra = Mathf.Max(extra, p.Chips[i] != null ? ChipsWidth(c, p.Chips[i]) : c.Measure(InkRich(p.Extras[i].Segs, InkSoft, false), c.F * 0.8f));
+                    extra = Mathf.Max(extra, p.Chips[i] != null ? ChipsWidth(c, p.Chips[i]) : c.Measure(InkRich(p.Extras[i].Segs, InkSoft), c.F * 0.8f));
                 if (p.Features.Count > 0) extra = Mathf.Max(extra, c.Measure(FeaturesRich(p), c.F * 0.8f));
-                if (p.Stolen != null) extra = Mathf.Max(extra, c.Measure(StolenLabel(p.Stolen), small) + 6f * c.U);
+                extra = Mathf.Max(extra, FlagsWidth(c, Flags(p)));
                 w = Mathf.Max(w, Mathf.Min(lead + c.Measure(InkRich(p.Name.Segs, Ink), c.F * 1.15f), widest));
                 w = Mathf.Max(w, Mathf.Min(lead + extra, max));
             }
 
-            // 价格行不能换行：大字价格、它的注解（“进价 137+18”，装了 Item Details 更长）和旁边的印章；以前长注解会跑到印章下面。
+            // 价格行不能换行：大字价格和它的注解（“进价 137+18”，装了 Item Details 更长）。
             if (p.Price != null)
             {
-                float line = c.Measure(InkRich(p.Price.Label, InkSoft, false), small) + c.Gap
+                float line = c.Measure(InkRich(p.Price.Label, InkSoft), small) + c.Gap
                     + c.Measure(BigPrice(p), PriceSize(c)) + c.Gap + c.Measure(p.PriceNote, small);
-                if (p.Stamps.Count > 0) line += 2f * c.Gap + StampSpan(c, p.Stamps[0]);
                 w = Mathf.Max(w, Mathf.Min(line + 2f * c.Pad, widest));
             }
             return Mathf.Round(Mathf.Max(w, TextWidth(c, p, r, w)));

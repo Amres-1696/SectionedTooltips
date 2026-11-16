@@ -9,10 +9,10 @@ using Palette = RenderHandler.ColorPalette;
 
 namespace SectionedTooltips
 {
-    /// 估价单的上半张：从排版结果里取出名称、价格、印章这些（Parts），画标题、大字价格、价格明细和印章。
+    /// 估价单的上半张：从排版结果里取出名称、价格、赃物和违禁品标记这些（Parts），画标题和标签、大字价格、价格明细。
     internal static partial class Ticket
     {
-        /// 估价单视角下的各节：名称、名称下的小行、印章、价格、描述。
+        /// 估价单视角下的各节：名称、名称下的小行、赃物和违禁品标记、价格、描述。
         private sealed class Parts
         {
             public Row Name;
@@ -20,7 +20,8 @@ namespace SectionedTooltips
             public readonly List<Row> Extras = new List<Row>();
             /// 对应 Extras 每一行：是“[机器]”那行标签时给出分类标签，否则为 null。
             public readonly List<List<Chip>> Chips = new List<List<Chip>>();
-            public readonly List<string> Stamps = new List<string>();
+            /// 违禁品标记（“中级违禁品”），和赃物一样画成名字下面的红色标签。
+            public readonly List<string> Contraband = new List<string>();
             /// 游戏的赃物标记（“[赃物（14%热度）]”）；不是赃物时为 null。
             public string Stolen;
             /// 游戏的“未拥有”标记，去掉方括号；自己物品时为 null。
@@ -31,7 +32,7 @@ namespace SectionedTooltips
             /// 价格后面括号里的内容（“进价 250+722”）。
             public List<Seg> NoteSegs = new List<Seg>();
             /// 价格注解的富文本，用当前纸的墨色。
-            public string PriceNote { get { return NoteRich(NoteSegs); } }
+            public string PriceNote { get { return NoteRich(NoteSegs, Price != null ? LabelColor(Price.Label) : Palette.None); } }
             public readonly List<Row> Prices = new List<Row>();
             public readonly List<Row> Desc = new List<Row>();
 
@@ -57,7 +58,7 @@ namespace SectionedTooltips
                             {
                                 int end = FlagEnd(plain);
                                 if (row.Ord == Helpers.OrdStolen) p.Stolen = plain.Substring(0, end);
-                                else p.Stamps.Add(plain.Substring(0, end));
+                                else p.Contraband.Add(plain.Substring(0, end));
                                 // 游戏写赃物标记用的是 Add 而不是 AddLine，所以后面跟的内容和它同一行：通常是物品标签，没有标签时是下一行。两种都按没有标记的样子显示。
                                 if (plain.Substring(end).Trim().Length > 0)
                                 {
@@ -145,7 +146,7 @@ namespace SectionedTooltips
                 int space = f.LastIndexOf(' ');
                 string tail = space > 0 ? f.Substring(space + 1) : "";
                 if (tail.Length > 1 && (tail[0] == '-' || tail[0] == '−') && tail.EndsWith("%"))
-                    sb.Append(Tint(f.Substring(0, space), InkSoft)).Append(' ').Append(Tint(tail, StampRed));
+                    sb.Append(Tint(f.Substring(0, space), InkSoft)).Append(' ').Append(Tint(tail, FlagRed));
                 else sb.Append(Tint(f, InkSoft));
             }
             return sb.ToString();
@@ -172,33 +173,6 @@ namespace SectionedTooltips
             r.Segs = rest;
             r.Ord = row.Ord;
             return r;
-        }
-
-        /// 第一个印章横向占多宽（尺寸和 Stamp 一致）。
-        private static float StampSpan(Ctx c, string text)
-        {
-            float sw, sh;
-            StampSize(c, text, out sw, out sh);
-            return sw;
-        }
-
-        /// 印章从它的行往下伸多深：Stamp 摆放时的下移量，加上它的高度。
-        private static float StampDrop(Ctx c, string text, int index)
-        {
-            float sw, sh;
-            StampSize(c, text, out sw, out sh);
-            return c.Gap + index * 2f * c.U + sh;
-        }
-
-        /// 印章的外框尺寸，用和 Stamp 一样的字体和边框估算（宁可多一点，不会少）。
-        private static void StampSize(Ctx c, string text, out float sw, out float sh)
-        {
-            string main, sub;
-            SplitFlag(text, out main, out sub);
-            float w = c.Measure("<b>" + main + "</b>", c.F * StampMain);
-            if (sub.Length > 0) w = Mathf.Max(w, c.Measure(sub, c.F * StampSub));
-            sw = w + 2f * StampEdge * c.U;
-            sh = c.M.Line * (sub.Length > 0 ? 1.6f : 1f) + 2f * StampEdge * c.U;
         }
 
         private static float Title(Ctx c, Parts p, GameItemElement item, float y)
@@ -229,7 +203,7 @@ namespace SectionedTooltips
             for (int i = 0; i < p.Extras.Count; i++)
             {
                 if (p.Chips[i] != null) { ty = DrawChips(c, p.Chips[i], x, ty, wrap); continue; }
-                TextMeshProUGUI t = Text(c, c.F * 0.8f, InkRich(p.Extras[i].Segs, InkSoft, false), Color.white, wrap);
+                TextMeshProUGUI t = Text(c, c.F * 0.8f, InkRich(p.Extras[i].Segs, InkSoft), Color.white, wrap);
                 Ui.Move(t.rectTransform, x, ty);
                 ty += t.rectTransform.sizeDelta.y;
             }
@@ -239,20 +213,20 @@ namespace SectionedTooltips
                 Ui.Move(t.rectTransform, x, ty);
                 ty += t.rectTransform.sizeDelta.y;
             }
-            // 最后画，这样赃物和非赃物看起来完全一样，只多一个标签。
-            if (p.Stolen != null) ty = StolenTag(c, p.Stolen, x, ty);
+            // 最后画，这样赃物、违禁品和普通物品看起来完全一样，只多一排红色标签。
+            ty = FlagTags(c, Flags(p), x, ty, wrap);
             return Mathf.Max(y + (icon != null ? boxSize : 0f), ty) + c.Gap * 1.5f;
         }
 
         /// 售价写大，价值一节其余的行画成带点线引导的小行。
-        private static float Price(Ctx c, Parts p, float y, float clear)
+        private static float Price(Ctx c, Parts p, float y)
         {
             float small = c.F * 0.75f;
             Row perCell = PerCellRow(p);
             if (p.Price != null)
             {
                 // “售价”用小字放在数字前面、和注解一样贴着数字底部，不单独占一行。
-                TextMeshProUGUI label = Text(c, small, InkRich(p.Price.Label, InkSoft, false), Color.white, 0f);
+                TextMeshProUGUI label = Text(c, small, InkRich(p.Price.Label, InkSoft), Color.white, 0f);
                 Vector2 ls = label.rectTransform.sizeDelta;
                 float bx = c.Pad + ls.x + c.Gap;
                 TextMeshProUGUI big = Text(c, PriceSize(c), BigPrice(p), Ink, 0f);
@@ -260,11 +234,10 @@ namespace SectionedTooltips
                 Vector2 bs = big.rectTransform.sizeDelta;
                 Ui.Move(label.rectTransform, c.Pad, y + bs.y - ls.y - c.U);
                 // 大字价格右边：进价，下面是性价比（常驻，不收起：它是估价单最要紧的数，收起再展开时下面的内容也不会跳）。两行一起贴着数字底部。
-                // 性价比不撑宽单子：右边放不下（印章也在这一行）就在价格下面单独一行。
+                // 性价比不撑宽单子：右边放不下就在价格下面单独一行。
                 string note = p.PriceNote;
                 float bottom = y + bs.y - c.U;
                 float room = c.W - c.Pad - (bx + bs.x + c.Gap);
-                if (p.Stamps.Count > 0) room -= 2f * c.Gap + StampSpan(c, p.Stamps[0]);
                 if (perCell != null && c.Measure(PerCellRich(perCell), small) <= room)
                 {
                     TextMeshProUGUI pc = Text(c, small, PerCellRich(perCell), Color.white, 0f);
@@ -279,7 +252,6 @@ namespace SectionedTooltips
                 }
                 y += bs.y + c.Gap;
             }
-            y = Mathf.Max(y, clear);
             if (perCell != null)
             {
                 // 价格右边放不下的性价比：单独一行，照样常驻。
@@ -301,7 +273,7 @@ namespace SectionedTooltips
                         Folded(c, "fold_prices");
                         continue;
                     }
-                    line.Add(InkRich(row.Label, InkSoft, false) + " " + InkRich(row.Value, Ink, false));
+                    line.Add(InkRich(row.Label, InkSoft) + " " + InkRich(row.Value, Ink));
                     continue;
                 }
                 y = PriceLine(c, line, y);
@@ -324,7 +296,7 @@ namespace SectionedTooltips
 
         private static string PerCellRich(Row row)
         {
-            return InkRich(row.Label, InkSoft, false) + " " + InkRich(row.Value, Ink, false);
+            return InkRich(row.Label, InkSoft) + " " + InkRich(row.Value, Ink);
         }
 
         /// 把攒起来的价格明细写出去并清空。返回底部位置。
@@ -396,93 +368,74 @@ namespace SectionedTooltips
             return open > 0 ? open : plain.Length;
         }
 
-        /// 赃物标签的文字：“赃物  14%热度”。
-        private static string StolenLabel(string text)
+        /// 赃物、违禁品标签的文字：“赃物  14%热度”、“中级违禁品”。
+        private static string FlagLabel(string text)
         {
             string main, sub;
             SplitFlag(text, out main, out sub);
             return "<b>" + (sub.Length > 0 ? main + "<space=0.6em>" + sub : main) + "</b>";
         }
 
-        /// 赃物在名字下面盖一个小红色实心标签，不用印章：它在标题自己的流里，不会和违禁品印章重叠，也保持小。返回它下面的 y。
-        private static float StolenTag(Ctx c, string text, float x, float y)
+        /// 名字下面的红色实心标签：赃物在前，违禁品在后。
+        private static List<string> Flags(Parts p)
         {
-            float px = 3f * c.U, py = c.U, top = 2f * c.U;
-            TextMeshProUGUI t = Text(c, c.F * 0.75f, StolenLabel(text), Paper, 0f);
-            Vector2 ts = t.rectTransform.sizeDelta;
-            Solid(c, StampRed, x, y + top, ts.x + 2f * px, ts.y + 2f * py);
-            Ui.Move(t.rectTransform, x + px, y + top + py);
-            return y + top + ts.y + 2f * py;
+            List<string> r = new List<string>();
+            if (p.Stolen != null) r.Add(p.Stolen);
+            r.AddRange(p.Contraband);
+            return r;
         }
 
-        /// 价格右侧空白处盖一个橡皮章（“违禁品”）。正的，因为倾斜的像素字会糊；双线框加几处磨掉的缺口，看起来像盖上去的，而不是个按钮。
-        private static RectTransform Stamp(Ctx c, string text, float y, int index)
+        private const float FlagSize = 0.75f;
+
+        /// 一个标签的宽度：文字加两边内边距。
+        private static float FlagWidth(Ctx c, string text)
         {
-            string main, sub;
-            SplitFlag(text, out main, out sub);
-            RectTransform st = Ui.NewRect(c.Card, "stamp");
-            TextMeshProUGUI t = Ui.NewText(st, c.Src, c.F * StampMain, "<b>" + main + "</b>", StampRed, 0f);
-            Vector2 ms = t.rectTransform.sizeDelta;
-            float w = ms.x, h = ms.y;
-            TextMeshProUGUI s = null;
-            if (sub.Length > 0)
+            return c.Measure(FlagLabel(text), c.F * FlagSize) + 6f * c.U;
+        }
+
+        /// 所有标签排一行的宽度。
+        private static float FlagsWidth(Ctx c, List<string> flags)
+        {
+            float w = 0f;
+            for (int i = 0; i < flags.Count; i++) w += FlagWidth(c, flags[i]) + (i > 0 ? 2f * c.U : 0f);
+            return w;
+        }
+
+        /// 赃物、违禁品在名字下面各盖一个小红色实心标签，排成一行，放不下就折行。不用印章：印章的方框看着像按钮。返回它们下面的 y。
+        private static float FlagTags(Ctx c, List<string> flags, float x, float y, float wrap)
+        {
+            if (flags.Count == 0) return y;
+            float px = 3f * c.U, py = c.U, top = 2f * c.U, gap = 2f * c.U;
+            float cx = x, cy = y + top, rowH = 0f;
+            for (int i = 0; i < flags.Count; i++)
             {
-                s = Ui.NewText(st, c.Src, c.F * StampSub, sub, StampRed, 0f);
-                w = Mathf.Max(w, s.rectTransform.sizeDelta.x);
-                h += s.rectTransform.sizeDelta.y;
-            }
-            float edge = StampEdge * c.U, outer = 2f * c.U, inset = outer + c.U;
-            float sw = w + 2f * edge, sh = h + 2f * edge;
-            Frame(st, 0f, 0f, sw, sh, outer);
-            Frame(st, inset, inset, sw - 2f * inset, sh - 2f * inset, c.U);
-            Wear(c, st, text, sw, sh, outer);
-            Ui.Move(t.rectTransform, Mathf.Round((sw - ms.x) / 2f), edge);
-            if (s != null) Ui.Move(s.rectTransform, Mathf.Round((sw - s.rectTransform.sizeDelta.x) / 2f), edge + ms.y);
-
-            float x = c.W - c.Pad - sw - index * Mathf.Round(sw * 0.35f);
-            Ui.Place(st, x, y + c.Gap + index * 2f * c.U, sw, sh);
-            // 轴心放中间，落下时以中心缩放。
-            st.pivot = new Vector2(0.5f, 0.5f);
-            st.anchoredPosition += new Vector2(sw / 2f, -sh / 2f);
-            return st;
-        }
-
-        /// 印章主文字和副文字的字号，相对正文字号。
-        private const float StampMain = 0.8f, StampSub = 0.6f;
-        /// 单子上最小的字号相对正文的比例（印章的小字），抬字号时按它算。
-        private const float MinFontShare = StampSub;
-        /// 印章每边的边框和内边距，按像素：外线 2、间隔 1、内线 1、内边距 1。
-        private const float StampEdge = 5f;
-
-        private static void Frame(RectTransform parent, float x, float y, float w, float h, float thick)
-        {
-            Ui.Place(Ui.NewImage(parent, StampRed), x, y, w, thick);
-            Ui.Place(Ui.NewImage(parent, StampRed), x, y + h - thick, w, thick);
-            Ui.Place(Ui.NewImage(parent, StampRed), x, y + thick, thick, h - 2f * thick);
-            Ui.Place(Ui.NewImage(parent, StampRed), x + w - thick, y + thick, thick, h - 2f * thick);
-        }
-
-        /// 外框线上几处没沾上墨的小缺口；同一个标记用同一组。
-        private static void Wear(Ctx c, RectTransform st, string text, float sw, float sh, float thick)
-        {
-            System.Random rng = new System.Random(text.GetHashCode());
-            for (int k = 0; k < 5; k++)
-            {
-                float len = rng.Next(1, 4) * c.U;
-                // 只挖最外面那一行像素：缺口叠在一起也还有里面一行，框永远不会破。
-                bool far = rng.Next(2) == 0;
-                if (rng.Next(3) > 0)
+                TextMeshProUGUI t = Text(c, c.F * FlagSize, FlagLabel(flags[i]), Paper, 0f);
+                Vector2 ts = t.rectTransform.sizeDelta;
+                float w = ts.x + 2f * px, h = ts.y + 2f * py;
+                if (cx > x && wrap > 0f && cx + w > x + wrap)
                 {
-                    float x = Mathf.Round((float)rng.NextDouble() * (sw - len - 2f * thick) / c.U) * c.U + thick;
-                    Ui.Place(Ui.NewImage(st, Paper), x, far ? sh - c.U : 0f, len, c.U);
+                    cx = x;
+                    cy += rowH + gap;
+                    rowH = 0f;
                 }
-                else
-                {
-                    float yy = Mathf.Round((float)rng.NextDouble() * (sh - len - 2f * thick) / c.U) * c.U + thick;
-                    Ui.Place(Ui.NewImage(st, Paper), far ? sw - c.U : 0f, yy, c.U, len);
-                }
+                Solid(c, FlagRed, cx, cy, w, h);
+                Ui.Move(t.rectTransform, cx + px, cy + py);
+                cx += w + gap;
+                rowH = Mathf.Max(rowH, h);
             }
+            return cy + rowH;
         }
+
+        /// 违禁品的单子左边一道整高的红边：一排货扫过去，余光就能认出来，单子里的内容不变。
+        private static void ContrabandEdge(Ctx c, float h)
+        {
+            Color red = FlagRed;
+            red.a = 1f;
+            Solid(c, red, c.U, c.U, Mathf.Max(3f * c.U, Mathf.Round(c.Pad * 0.4f)), h - 2f * c.U);
+        }
+
+        /// 单子上最小的字号相对正文的比例，抬字号时按它算。实际最小的是页脚单号和格子堆叠数（0.65），这里留一点余量。
+        private const float MinFontShare = 0.6f;
 
         private static string LeadingNumber(string s)
         {
@@ -539,13 +492,38 @@ namespace SectionedTooltips
             return row;
         }
 
-        /// 价格后面括号里的注解，转成墨色、保留颜色、去掉括号。
-        private static string NoteRich(List<Seg> note)
+        /// 有字、没有数字的一段（“进价”），不是“74”“+783”。
+        private static bool Wordy(string t)
+        {
+            bool letter = false;
+            for (int i = 0; i < t.Length; i++)
+            {
+                if (char.IsDigit(t[i])) return false;
+                if (char.IsLetter(t[i])) letter = true;
+            }
+            return letter;
+        }
+
+        /// 标签里第一个带颜色的段的颜色；都没颜色返回 None。
+        private static Palette LabelColor(List<Seg> label)
+        {
+            if (label == null) return Palette.None;
+            for (int i = 0; i < label.Count; i++) if (label[i].Color != Palette.None) return label[i].Color;
+            return Palette.None;
+        }
+
+        /// 价格后面括号里的注解，转成墨色、保留颜色、去掉括号。注解里的字（“进价”）和“售价”用同一个颜色，不然一个有色一个没色；数字照游戏给的颜色。
+        private static string NoteRich(List<Seg> note, Palette labelColor)
         {
             List<Seg> rest = new List<Seg>();
             for (int i = 0; i < note.Count; i++)
             {
                 Seg s = note[i];
+                if (labelColor != Palette.None && Wordy(s.Text))
+                {
+                    s = s.With(s.Text);
+                    s.Color = labelColor;
+                }
                 if (rest.Count == 0)
                 {
                     string t = s.Text.TrimStart();
@@ -558,6 +536,7 @@ namespace SectionedTooltips
             }
             string rich = InkRich(rest, InkSoft);
             string plain = TextUnits.Plain(rich).Trim();
+
             if (plain.Length >= 2 && (plain[0] == '（' || plain[0] == '('))
             {
                 int open = rich.IndexOfAny(new char[] { '（', '(' });
