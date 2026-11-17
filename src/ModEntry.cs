@@ -101,6 +101,7 @@ namespace SectionedTooltips
         internal static ConfigEntry<bool> ShowModInfo;
         internal static ConfigEntry<bool> ShowFooter;
         internal static ConfigEntry<bool> TagBackground;
+        internal static ConfigEntry<bool> KeepColors;
         internal static ConfigEntry<bool> Collapse;
         internal static ConfigEntry<string> ExpandKey;
         internal static ConfigEntry<bool> CollapsePrices;
@@ -168,6 +169,7 @@ namespace SectionedTooltips
             Opacity = Number(cfg, "TicketOpacity", 100, slip, "cfg_opacity", 40, 100);
             Paper = cfg.Define("PaperColor", Ticket.PaperNames[0], slip, Text("cfg_paper"), Ticket.PaperNames, Text("cfg_paper_tip"), false);
             NotOwnedPaper = cfg.Define("NotOwnedPaperColor", Ticket.PaperNames[1], slip, Text("cfg_paper_not_owned"), Ticket.PaperNames, Text("cfg_paper_not_owned_tip"), false);
+            KeepColors = cfg.Define("TextColors", true, slip, Text("cfg_text_colors"), Text("cfg_text_colors_tip"), false);
             ModsColumn = Number(cfg, "ModsColumnLines", 8, slip, "cfg_mods_column", 0, 30);
             // 显示哪些内容（关掉的两种风格都不显示，按展开键也不出来）。
             Icon = cfg.Define("ItemIcon", true, content, Text("cfg_icon"), Text("cfg_icon_tip"), false);
@@ -224,6 +226,7 @@ namespace SectionedTooltips
             ShowModInfo.OnChanged += delegate { Version++; };
             ShowFooter.OnChanged += delegate { Version++; };
             TagBackground.OnChanged += delegate { Version++; };
+            KeepColors.OnChanged += delegate { Version++; };
             Collapse.OnChanged += delegate { Version++; };
             ExpandKey.OnChanged += delegate { Version++; };
             CollapsePrices.OnChanged += delegate { Version++; };
