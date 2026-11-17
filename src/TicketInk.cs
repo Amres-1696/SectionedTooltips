@@ -61,6 +61,17 @@ namespace SectionedTooltips
             FlagRed = darkPaper ? (Color)new Color32(226, 104, 86, 220) : (Color)new Color32(158, 60, 50, 200);
         }
 
+        /// 文字的墨色。设置里开着“文字颜色”（默认）时保留游戏和其他模组给的颜色；关掉时只留红、橙、黄这些提醒色，其余统一用 fallback（纸自己的墨）。
+        /// 进度条、分类标签这些不是文字的颜色不受这个设置影响，直接用 InkOf。
+        private static Color TextInk(Palette p, Color fallback)
+        {
+            if (p == Palette.None) return fallback;
+            if (Settings.KeepColors == null || Settings.KeepColors.Value) return InkOf(p, fallback);
+            float h, s, v;
+            Color.RGBToHSV(Overlay.ToColor(p, Palette.Gray), out h, out s, out v);
+            return s >= 0.25f && (h < 0.17f || h > 0.94f) ? InkOf(p, fallback) : fallback;
+        }
+
         /// 把游戏的调色板颜色转成纸上的墨（见下面的 InkOf(Color, Color)）；灰色改用纸自己的墨。
         private static Color InkOf(Palette p, Color fallback)
         {
@@ -68,8 +79,9 @@ namespace SectionedTooltips
             return InkOf(Overlay.ToColor(p, Palette.Gray), fallback);
         }
 
-        /// 任意颜色调到纸上：保留色相、颜色要鲜，亮度取和纸刚好够对比度的那一档（浅纸上从亮往暗找，深纸上从暗往亮找）。
-        /// 以前一律压到同一个暗度，橙色、黄色在米黄纸上都成了发闷的棕色，看不出是彩色。太灰的用 fallback。
+        /// 任意颜色调到纸上，保留色相；太灰的用 fallback。
+        /// 浅纸：颜色要鲜，亮度从亮往暗找，到和纸的对比度够了为止（一律压到同一个暗度时，橙、黄在米黄纸上都成了发闷的棕色）。
+        /// 深纸：直接用亮的、略淡的颜色，和深纸上的白字一样亮。不能也按“刚好够”去找：那一档在深纸上是勉强能读的暗色，原来白色的数值会一下子变灰。
         private static Color InkOf(Color c, Color fallback)
         {
             float h, s, v;
@@ -80,20 +92,23 @@ namespace SectionedTooltips
             int key = c32.r | (c32.g << 8) | (c32.b << 16);
             Color k;
             if (inks.TryGetValue(key, out k)) return k;
-            float sat = darkPaper ? Mathf.Clamp01(Mathf.Max(s, 0.6f) * 0.75f) : Mathf.Clamp01(Mathf.Max(s, 0.75f));
-            k = Color.HSVToRGB(h, sat, darkPaper ? 1f : 0.2f);
-            for (int i = 0; i <= 40; i++)
+            if (darkPaper) k = Color.HSVToRGB(h, Mathf.Clamp01(s * 0.55f + 0.1f), 0.92f);
+            else
             {
-                float val = darkPaper ? 0.45f + i * 0.0137f : 0.95f - i * 0.0187f;
-                Color t = Color.HSVToRGB(h, sat, val);
-                if (Contrast(t, Paper) >= InkContrast) { k = t; break; }
+                float sat = Mathf.Clamp01(Mathf.Max(s, 0.75f));
+                k = Color.HSVToRGB(h, sat, 0.2f);
+                for (int i = 0; i <= 40; i++)
+                {
+                    Color t = Color.HSVToRGB(h, sat, 0.95f - i * 0.0187f);
+                    if (Contrast(t, Paper) >= InkContrast) { k = t; break; }
+                }
             }
             k.a = 1f;
             inks[key] = k;
             return k;
         }
 
-        /// 彩色墨和纸的对比度：够读，又不至于压成黑色。
+        /// 浅纸上彩色墨和纸的对比度：够读，又不至于压成黑色。
         private const float InkContrast = 4f;
         private static readonly Dictionary<int, Color> inks = new Dictionary<int, Color>();
 
@@ -122,7 +137,7 @@ namespace SectionedTooltips
             {
                 Seg s = segs[i];
                 if (Drawn(s) || string.IsNullOrEmpty(s.Text)) continue;
-                Color ink = InkOf(s.Color, baseInk);
+                Color ink = TextInk(s.Color, baseInk);
                 sb.Append("<color=#").Append(ColorUtility.ToHtmlStringRGB(ink)).Append('>');
                 if (s.Bold) sb.Append("<b>");
                 sb.Append(s.Text);

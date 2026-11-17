@@ -122,10 +122,10 @@ namespace SectionedTooltips
             return sb.ToString();
         }
 
-        /// 数值的墨色：保留游戏和其他模组给的颜色（液体成分各有各的颜色），调到纸上的深浅。
+        /// 数值的墨色，跟着设置里的“文字颜色”（见 TextInk）。
         private static Color ValueInk(Palette p)
         {
-            return InkOf(p, Ink);
+            return TextInk(p, Ink);
         }
 
         /// 由多种颜色组成的数值，各部分按自己的 ValueInk。
