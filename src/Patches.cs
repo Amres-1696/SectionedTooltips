@@ -114,6 +114,15 @@ namespace SectionedTooltips
         }
     }
 
+    [HarmonyPatch(typeof(RichTextElement), "Validate")]
+    internal static class ValidatePatch
+    {
+        private static void Postfix(RichTextElement __instance)
+        {
+            Overlay.AlignLayers(__instance);
+        }
+    }
+
     [HarmonyPatch(typeof(OverlayHandler), "ShowTooltip", new Type[] { typeof(Vector2), typeof(Vector2), typeof(RichText), typeof(int) })]
     internal static class ShowTooltipPatch
     {
@@ -129,8 +138,9 @@ namespace SectionedTooltips
     [HarmonyPatch(typeof(GameItemElement), "HasTooltip")]
     internal static class HasTooltipPatch
     {
-        private static void Postfix(ref bool __result)
+        private static void Postfix(GameItemElement __instance, ref bool __result)
         {
+            if (__result) Expand.Poll(__instance);
             if (__result && Expand.Concealed) __result = false;
         }
     }

@@ -77,7 +77,8 @@ namespace SectionedTooltips
 
             string title = "<b>" + Tint(string.Format(SectionedTooltipsMod.L("packing_title"), pieces), Ink) + "</b>";
             // 储藏区扩建后有几页：只列当前页，标题右边写“第 2/5 页”。
-            string page = contents.Pages > 1 ? Tint(string.Format(SectionedTooltipsMod.L("packing_page"), contents.Page, contents.Pages), InkSoft) : "";
+            string cap = Expand.PageCap;
+            string page = contents.Pages > 1 ? Tint(string.Format(SectionedTooltipsMod.L(cap != null ? "packing_page" : "packing_page_plain"), contents.Page, contents.Pages, cap), InkSoft) : "";
             string more = moreKinds > 0 ? Tint(string.Format(SectionedTooltipsMod.L("packing_more"), moreKinds), InkSoft) : "";
 
             // 宽度：最长的一行，夹在 7 到 13 个字宽之间；放不下的名字截短加“…”。

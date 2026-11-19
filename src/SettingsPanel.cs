@@ -9,7 +9,7 @@ using UnityEngine.UI;
 namespace SectionedTooltips
 {
     /// 挂在我们设置面板上：在滑块右边显示数值，在纸色列表旁显示色块，还有一张跟着控件走的示例估价单。它每帧读控件而不是监听，所以“恢复默认值”这种静默改动也能反映出来。
-    internal sealed class SettingsPanel : MonoBehaviour
+    internal sealed partial class SettingsPanel : MonoBehaviour
     {
         private sealed class SliderValue
         {
@@ -88,6 +88,7 @@ namespace SectionedTooltips
             SettingsPanel p = window.root.AddComponent<SettingsPanel>();
             p.window = window;
             p.font = label.text;
+            p.Restyle();
             p.AddValue("TicketScale", 5, "%");
             p.AddValue("PriceSize", 10, "%");
             p.AddValue("ModsColumnLines", 1, "");
@@ -260,6 +261,7 @@ namespace SectionedTooltips
         {
             try
             {
+                UpdateStyle();
                 for (int i = 0; i < sliders.Count; i++) UpdateValue(sliders[i]);
                 for (int i = 0; i < swatches.Count; i++) UpdateSwatch(swatches[i]);
                 if (preview != null) UpdatePreview();

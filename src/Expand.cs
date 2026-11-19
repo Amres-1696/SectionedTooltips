@@ -4,7 +4,8 @@ using UnityEngine;
 namespace SectionedTooltips
 {
     /// <summary>
-    /// 估价单的收起和展开：平时收起价格明细、内容物、描述等（哪些由设置决定），按住展开键时显示完整的单子。
+    /// 估价单的收起和展开：平时收起价格明细、内容物、描述等（哪些由设置决定），按住展开键时显示完整的单子；
+    /// 也可以设成按一下展开、再按一下收起。另有一个翻页键，切换装箱单显示储藏区的哪一页。
     /// 按键是一份固定的列表，设置里用下拉框选（游戏的模组设置没有“按一个键”的控件）。
     /// </summary>
     internal static class Expand
@@ -37,26 +38,69 @@ namespace SectionedTooltips
             "M4", "M5",
         };
 
-        private static int Index
+        /// 展开键的两种用法，原样显示在设置菜单里。
+        internal static readonly string[] Modes = { "按住 Hold", "按一下切换 Toggle" };
+
+        private static int Index { get { return KeyIndex(Settings.ExpandKey, 0); } }
+
+        /// 翻页键默认是 Tab（游戏自己没有用它）。
+        internal const int DefaultPageKey = 3;
+
+        private static int PageIndex { get { return KeyIndex(Settings.PageKey, DefaultPageKey); } }
+
+        private static int KeyIndex(ConfigEntry<string> e, int def)
         {
-            get
-            {
-                int i = Settings.ExpandKey != null ? Array.IndexOf(KeyNames, Settings.ExpandKey.Value) : 0;
-                return i >= 0 && i < Codes.Length ? i : 0;
-            }
+            int i = e != null ? Array.IndexOf(KeyNames, e.Value) : def;
+            return i >= 0 && i < Codes.Length ? i : def;
         }
+
+        private static bool Toggles { get { return Settings.ExpandMode != null && Settings.ExpandMode.Value == Modes[1]; } }
+
+        /// 切换模式下现在是不是展开着。
+        private static bool toggled;
+        private static int polledFrame = -1;
+
+        /// 每帧读一次按键（游戏每帧问鼠标下的物品有没有 tooltip 时调用，见 HasTooltipPatch）：
+        /// 切换模式下按一下展开键换一次状态；按翻页键让装箱单看下一页。只在鼠标停在物品上时读。
+        internal static void Poll(GameItem item)
+        {
+            int frame = Time.frameCount;
+            if (frame == polledFrame) return;
+            polledFrame = frame;
+            try
+            {
+                if (!Settings.On(Settings.Enabled)) return;
+                int key = Index, page = PageIndex;
+                if (Toggles && Down(Codes[key])) toggled = !toggled;
+                ContentsInfo.Hover(item, page != key && Down(Codes[page]));
+            }
+            catch { }
+        }
+
+        private static bool Down(KeyCode[] keys)
+        {
+            for (int i = 0; i < keys.Length; i++) if (Input.GetKeyDown(keys[i])) return true;
+            return false;
+        }
+
+        /// 翻页键画在页码旁边的字；翻页键和展开键相同（翻页不起作用）时为 null。
+        internal static string PageCap { get { int p = PageIndex; return p != Index ? Caps[p] : null; } }
+
+        /// 换了展开方式：切换模式下留下的展开状态不带过去。
+        internal static void ResetToggle() { toggled = false; }
 
         /// 收起功能开着吗。
         internal static bool Enabled { get { return Settings.On(Settings.Collapse); } }
 
-        /// 现在要显示完整的单子吗：收起功能关着，或者展开键按着。
+        /// 现在要显示完整的单子吗：收起功能关着，或者展开键按着（切换模式下是切到了展开）。
         internal static bool Full { get { return !Enabled || KeyHeld; } }
 
-        /// 展开键现在按着吗。
+        /// 展开键现在按着吗；切换模式下是现在是不是切到了展开。
         internal static bool KeyHeld
         {
             get
             {
+                if (Toggles) return toggled;
                 KeyCode[] keys = Codes[Index];
                 try
                 {
