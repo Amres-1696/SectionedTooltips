@@ -146,7 +146,7 @@ namespace SectionedTooltips
             if (element == null) return items;
             // 游戏的 CollectSelectedTabStorage 遇到普通网格什么都不收，所以只在是标签页时自己换成当前页。
             MachineryTabs tabs = selectedTab ? element as MachineryTabs : null;
-            if (tabs != null) element = tabs.GetPage(tabs.selected);
+            if (tabs != null) element = tabs.GetPage(Shown(tabs));
             if (element == null) return items;
             List<GraphNodeStorage> storages = MachineryContainerUtils.Collect(element);
             if (storages == null) return items;
@@ -241,26 +241,69 @@ namespace SectionedTooltips
             return r;
         }
 
-        /// 储藏区扩建后的标签页：选中的是第几页（从 0 起）、一共几页。机器和没有标签页的容器返回 false。
+        /// 储藏区扩建后的标签页：显示的是第几页（从 0 起）、一共几页。机器和没有标签页的容器返回 false。
         private static bool PageOf(GameItem item, out int page, out int pages)
         {
             page = pages = 0;
             try
             {
-                if (item == null || item.IsGameItemType("MACHINE")) return false;
-                PixelWindow window = item.contentWindow;
-                PixelElement root = window != null ? window.childElement : null;
-                MachineryTabs tabs = root as MachineryTabs;
-                MachineryPanelRow row = root as MachineryPanelRow;
-                if (tabs == null && row != null && row.Panels != null)
-                    for (int i = 0; i < row.Panels.Count && tabs == null; i++)
-                        if (row.Panels[i] != null && !row.Panels[i].isHidden) tabs = row.Panels[i].content as MachineryTabs;
+                MachineryTabs tabs = TabsOf(item);
                 if (tabs == null || tabs.count < 2) return false;
-                page = tabs.selected;
+                page = Shown(tabs);
                 pages = tabs.count;
                 return true;
             }
             catch { return false; }
+        }
+
+        private static MachineryTabs TabsOf(GameItem item)
+        {
+            if (item == null || item.IsGameItemType("MACHINE")) return null;
+            PixelWindow window = item.contentWindow;
+            PixelElement root = window != null ? window.childElement : null;
+            MachineryTabs tabs = root as MachineryTabs;
+            MachineryPanelRow row = root as MachineryPanelRow;
+            if (tabs == null && row != null && row.Panels != null)
+                for (int i = 0; i < row.Panels.Count && tabs == null; i++)
+                    if (row.Panels[i] != null && !row.Panels[i].isHidden) tabs = row.Panels[i].content as MachineryTabs;
+            return tabs;
+        }
+
+        /// 按翻页键后，物品详情里看的是 viewTabs 的第 viewPage 页，不动游戏窗口自己选中的那页。
+        /// 鼠标换到别的物品、或者离开过（中间有一帧没停在物品上），就回到游戏选中的那页。
+        private static MachineryTabs viewTabs;
+        private static int viewPage;
+        private static GameItem viewItem;
+        private static int hoverFrame = -10;
+
+        /// 物品详情里显示这组标签页的哪一页。
+        private static int Shown(MachineryTabs tabs)
+        {
+            return ReferenceEquals(tabs, viewTabs) && viewPage >= 0 && viewPage < tabs.count ? viewPage : tabs.selected;
+        }
+
+        /// 鼠标下的物品是 item；按了翻页键时 next 为 true，换到下一页（最后一页之后回到第一页）。
+        internal static void Hover(GameItem item, bool next)
+        {
+            int frame = UnityEngine.Time.frameCount;
+            bool away = frame - hoverFrame > 1;
+            hoverFrame = frame;
+            if (away || !ReferenceEquals(item, viewItem))
+            {
+                viewItem = item;
+                viewTabs = null;
+            }
+            if (!next) return;
+            try
+            {
+                MachineryTabs tabs = TabsOf(item);
+                if (tabs == null || tabs.count < 2) return;
+                viewPage = (Shown(tabs) + 1) % tabs.count;
+                viewTabs = tabs;
+                // 指纹按 0.25 秒缓存，翻页要马上重排。
+                signedItem = null;
+            }
+            catch { }
         }
 
         private static ContentsInfo CollectNow(GameItem item)

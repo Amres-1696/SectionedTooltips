@@ -104,6 +104,8 @@ namespace SectionedTooltips
         internal static ConfigEntry<bool> KeepColors;
         internal static ConfigEntry<bool> Collapse;
         internal static ConfigEntry<string> ExpandKey;
+        internal static ConfigEntry<string> ExpandMode;
+        internal static ConfigEntry<string> PageKey;
         internal static ConfigEntry<bool> CollapsePrices;
         internal static ConfigEntry<bool> CollapseContents;
         internal static ConfigEntry<bool> CollapseDescription;
@@ -148,16 +150,23 @@ namespace SectionedTooltips
         /// 估价单那一节的名称：设置面板把预览放在这个标题下。
         internal const string SlipSection = "Slip / 估价单";
 
+        /// 设置窗口里的各节，按显示顺序；第二列是节标题的本地化键（设置面板换上本地化的标题，见 SettingsStyle）。
+        internal static readonly string[,] Sections =
+        {
+            { "General / 常规", "cfg_section_general" },
+            { SlipSection, "cfg_section_slip" },
+            { "Content / 显示内容", "cfg_section_content" },
+            { "Collapse / 收起与展开", "cfg_section_fold" },
+            { "Tags / 分类标签", "cfg_section_tags" },
+            { "Classic style / 经典风格", "cfg_section_classic" },
+            { "Diagnostics / 诊断", "cfg_section_debug" },
+        };
+
         internal static void Define(ModConfig cfg)
         {
             // Init 早于加载器读取本模组的 Localization csv，所以节名在这里没法本地化；标签和提示是回调，可以。
-            const string general = "General / 常规";
-            const string slip = SlipSection;
-            const string content = "Content / 显示内容";
-            const string fold = "Collapse / 收起与展开";
-            const string tags = "Tags / 分类标签";
-            const string classic = "Classic style / 经典风格";
-            const string debug = "Diagnostics / 诊断";
+            string general = Sections[0, 0], slip = Sections[1, 0], content = Sections[2, 0], fold = Sections[3, 0],
+                tags = Sections[4, 0], classic = Sections[5, 0], debug = Sections[6, 0];
 
             // 按设置窗口里的顺序定义：常规、估价单外观、显示内容、收起与展开、分类标签、经典风格、诊断。
             // 存档只按键名存，挪分组不影响已经保存的值。
@@ -185,6 +194,8 @@ namespace SectionedTooltips
             // 估价单平时收起哪些部分，按住哪个键展开。
             Collapse = cfg.Define("Collapse", true, fold, Text("cfg_collapse"), Text("cfg_collapse_tip"), false);
             ExpandKey = cfg.Define("ExpandKey", Expand.KeyNames[0], fold, Text("cfg_expand_key"), Expand.KeyNames, Text("cfg_expand_key_tip"), false);
+            ExpandMode = cfg.Define("ExpandMode", Expand.Modes[0], fold, Text("cfg_expand_mode"), Expand.Modes, Text("cfg_expand_mode_tip"), false);
+            PageKey = cfg.Define("PageKey", Expand.KeyNames[Expand.DefaultPageKey], fold, Text("cfg_page_key"), Expand.KeyNames, Text("cfg_page_key_tip"), false);
             CollapsePrices = cfg.Define("CollapsePrices", true, fold, Text("cfg_collapse_prices"), Text("cfg_collapse_prices_tip"), false);
             CollapseContents = cfg.Define("CollapseContents", true, fold, Text("cfg_collapse_contents"), Text("cfg_collapse_contents_tip"), false);
             CollapseDescription = cfg.Define("CollapseDescription", true, fold, Text("cfg_collapse_desc"), Text("cfg_collapse_desc_tip"), false);
@@ -229,6 +240,8 @@ namespace SectionedTooltips
             KeepColors.OnChanged += delegate { Version++; };
             Collapse.OnChanged += delegate { Version++; };
             ExpandKey.OnChanged += delegate { Version++; };
+            ExpandMode.OnChanged += delegate { Expand.ResetToggle(); Version++; };
+            PageKey.OnChanged += delegate { Version++; };
             CollapsePrices.OnChanged += delegate { Version++; };
             CollapseContents.OnChanged += delegate { Version++; };
             CollapseDescription.OnChanged += delegate { Version++; };

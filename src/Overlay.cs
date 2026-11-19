@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
+using System.Text;
 using HarmonyLib;
 using TMPro;
 using UnityEngine;
@@ -97,9 +99,186 @@ namespace SectionedTooltips
         /// RichText 四层文字的 setter 是私有的。
         private static MethodInfo[] layerSetters;
 
+        /// 行距固定后，几层还会整体错开一截：TMP 顶端对齐时按第一行里最高的字定整段文字的起点，
+        /// 正文第一行是物品名，有回退字体里的字（比如俄文界面里的中文名）时比底色层那行空格高。
+        /// 排好版后量正文和底色层同一行的基线，把底色、下划线、删除线三层挪过去。
+        /// RichTextElement.Validate 每次都会把几层的位置重置，所以挂在它后面（见 Patches.cs）。
+        internal static void AlignLayers(RichTextElement e)
+        {
+            try
+            {
+                if (e == null || Settings.IsTicket || !Settings.On(Settings.Enabled)) return;
+                if (layerNodes == null)
+                {
+                    string[] names = { "textNode", "textBackgroundNode", "textUnderlineNode", "textStrikethroughNode" };
+                    layerNodes = new FieldInfo[names.Length];
+                    for (int i = 0; i < names.Length; i++) layerNodes[i] = AccessTools.Field(typeof(RichTextElement), names[i]);
+                }
+                TMP_Text fg = LayerText(e, 0), bg = LayerText(e, 1);
+                if (fg == null || bg == null || fg.text == null || !fg.text.StartsWith(EvenLine, StringComparison.Ordinal)) return;
+                if (!ReferenceEquals(fg.text, alignedFg) || !ReferenceEquals(bg.text, alignedBg))
+                {
+                    alignedFg = fg.text;
+                    alignedBg = bg.text;
+                    alignDy = LayerOffset(fg, bg);
+                }
+                if (Mathf.Abs(alignDy) < 0.01f) return;
+                for (int i = 1; i < layerNodes.Length; i++)
+                {
+                    TMP_Text t = LayerText(e, i);
+                    if (t == null) continue;
+                    RectTransform rt = t.rectTransform;
+                    rt.anchoredPosition = rt.anchoredPosition + new Vector2(0f, alignDy);
+                }
+            }
+            catch { }
+        }
+
+#if DEVDUMP
+        private static string loggedLayers;
+
+        private static void LogLayers(OverlayHandler handler)
+        {
+            try
+            {
+                if (fTooltipElement == null || layerNodes == null) return;
+                RichTextElement e = fTooltipElement.GetValue(handler) as RichTextElement;
+                if (e == null) return;
+                TMP_Text fg = LayerText(e, 0);
+                if (fg == null || ReferenceEquals(fg.text, loggedLayers)) return;
+                loggedLayers = fg.text;
+                System.Text.StringBuilder b = new System.Text.StringBuilder("[layers] dy=" + alignDy.ToString("F2"));
+                for (int i = 0; i < layerNodes.Length; i++)
+                {
+                    TMP_Text t = LayerText(e, i);
+                    if (t == null) continue;
+                    RectTransform rt = t.rectTransform;
+                    b.AppendFormat(" | {0}: pos={1} size={2} pivot={3} anchorMin={4} world={5} lossy={6} margin={7} parent={8} active={9}",
+                        i, rt.anchoredPosition.ToString("F2"), rt.rect.size.ToString("F2"), rt.pivot, rt.anchorMin, rt.position.ToString("F2"), rt.lossyScale.ToString("F3"), t.margin.ToString("F2"),
+                        rt.parent != null ? rt.parent.name : "-", t.gameObject.activeInHierarchy);
+                }
+                SectionedTooltipsMod.Log(b.ToString());
+            }
+            catch (Exception ex) { SectionedTooltipsMod.Log("[layers] " + ex.Message); }
+        }
+#endif
+
+        private static FieldInfo[] layerNodes;
+        private static string alignedFg, alignedBg;
+        private static float alignDy;
+
+        private static TMP_Text LayerText(RichTextElement e, int i)
+        {
+            if (layerNodes[i] == null) return null;
+            TreeNodeRender node = layerNodes[i].GetValue(e) as TreeNodeRender;
+            return node != null ? node.text : null;
+        }
+
+        /// 底色层第一个“█”所在的行，正文和底色层这一行基线的差。量不出来就是 0。
+        /// 顺便量方块字该抬多高（见 boxLift），下一次排的字用新值。
+        private static float LayerOffset(TMP_Text fg, TMP_Text bg)
+        {
+            // 鼠标从空处移到物品上时，Validate 在窗口激活之前跑：不加 true 的话 TMP 不排未激活的字，量到的是上一段文字。
+            fg.ForceMeshUpdate(true);
+            bg.ForceMeshUpdate(true);
+            TMP_TextInfo bi = bg.textInfo, fi = fg.textInfo;
+            for (int i = 0; i < bi.characterCount; i++)
+            {
+                TMP_CharacterInfo bc = bi.characterInfo[i];
+                if (!bc.isVisible || bc.character != '\u2588') continue;
+                int line = bc.lineNumber;
+                if (line >= fi.lineCount || line >= bi.lineCount) return 0f;
+                float bgBase = bi.lineInfo[line].baseline;
+                MeasureLift(fg, bg.text, (bc.topLeft.y + bc.bottomLeft.y) * 0.5f - bgBase);
+#if DEVDUMP
+                SectionedTooltipsMod.Log(string.Format("[align] line {0} fgBase={1:F2} bgBase={2:F2} box top={3:F2} bot={4:F2} lift={5:F3}em",
+                    line, fi.lineInfo[line].baseline, bgBase, bc.topLeft.y - bgBase, bc.bottomLeft.y - bgBase, boxLift));
+#endif
+                return fi.lineInfo[line].baseline - bgBase;
+            }
+            return 0f;
+        }
+
+        /// 方块字（▌├└█ 这些）来自另一个像素字体，它的方块中心比正文文字的视觉中心低，
+        /// 底条和左边的小竖条看起来就比字低了一截。几层里的方块字都用 voffset 抬到正文大写字母高度的一半。
+        /// 抬多少跟界面语言的字体有关，排好版后量（MeasureLift），起始值是俄文界面量出来的。
+        private static float boxLift = 0.23f;
+
+        private static void MeasureLift(TMP_Text fg, string bgText, float boxCenter)
+        {
+            if (fg.font == null || fg.fontSize <= 0f) return;
+            UnityEngine.TextCore.FaceInfo face = fg.font.faceInfo;
+            if (face.pointSize <= 0f || face.capLine <= 0f) return;
+            float target = face.capLine * fg.fontSize / face.pointSize * face.scale * 0.5f;
+            float now = LiftIn(bgText) * fg.fontSize;
+            float lift = (target - (boxCenter - now)) / fg.fontSize;
+            if (lift > -0.5f && lift < 0.5f) boxLift = lift;
+        }
+
+        private const string LiftOpen = "<voffset=";
+
+        private static float LiftIn(string text)
+        {
+            int at = text != null ? text.IndexOf(LiftOpen, StringComparison.Ordinal) : -1;
+            if (at < 0) return 0f;
+            int end = text.IndexOf("em>", at, StringComparison.Ordinal);
+            float v;
+            if (end < 0 || !float.TryParse(text.Substring(at + LiftOpen.Length, end - at - LiftOpen.Length), NumberStyles.Float, CultureInfo.InvariantCulture, out v)) return 0f;
+            return v;
+        }
+
+        private static bool IsBox(char c)
+        {
+            return c >= '\u2500' && c <= '\u259F';
+        }
+
+        private const string NoParse = "<noparse>", NoParseEnd = "</noparse>";
+
+        private static string LiftBoxes(string s)
+        {
+            int first = -1;
+            for (int i = 0; i < s.Length; i++) if (IsBox(s[i])) { first = i; break; }
+            if (first < 0) return s;
+            string open = LiftOpen + boxLift.ToString("0.###", CultureInfo.InvariantCulture) + "em>";
+            StringBuilder sb = new StringBuilder(s.Length + 64);
+            sb.Append(s, 0, first);
+            for (int i = first; i < s.Length; )
+            {
+                char c = s[i];
+                if (c == '<')
+                {
+                    int end = s.IndexOf('>', i);
+                    if (end < 0) { sb.Append(s, i, s.Length - i); break; }
+                    // <noparse> 里的标签会原样显示出来，里面的方块字不能加 voffset。
+                    if (string.CompareOrdinal(s, i, NoParse, 0, NoParse.Length) == 0)
+                    {
+                        int close = s.IndexOf(NoParseEnd, end, StringComparison.OrdinalIgnoreCase);
+                        end = close < 0 ? s.Length - 1 : close + NoParseEnd.Length - 1;
+                    }
+                    sb.Append(s, i, end - i + 1);
+                    i = end + 1;
+                }
+                else if (IsBox(c))
+                {
+                    int j = i;
+                    while (j < s.Length && IsBox(s[j])) j++;
+                    sb.Append(open).Append(s, i, j - i).Append("</voffset>");
+                    i = j;
+                }
+                else { sb.Append(c); i++; }
+            }
+            return sb.ToString();
+        }
+
+        /// TMP 的 </line-height> 不回到外层设置，而是直接回到默认行高。Item Details 把厂商名叠到标题行右边时用了
+        /// <line-height=0>…</line-height>，之后的行就又不固定了，所以每个 </line-height> 后面都要补回来。
+        private const string EndLine = "</line-height>";
+
         private static string Even(string s)
         {
-            return string.IsNullOrEmpty(s) || s.StartsWith(EvenLine, StringComparison.Ordinal) ? s : EvenLine + s;
+            if (string.IsNullOrEmpty(s) || s.StartsWith(EvenLine, StringComparison.Ordinal)) return s;
+            if (s.IndexOf(EndLine, StringComparison.Ordinal) >= 0) s = s.Replace(EndLine, EndLine + EvenLine);
+            return EvenLine + LiftBoxes(s);
         }
 
         internal static void OnShow(OverlayHandler handler, RichText text)
@@ -126,6 +305,9 @@ namespace SectionedTooltips
                     return;
                 }
                 Ticket.Hide();
+#if DEVDUMP
+                LogLayers(handler);
+#endif
                 if (r.Bars.Count == 0 && r.IconLine < 0) HideInline();
                 // 之后窗口布局可能改变文字矩形的大小；变了就重新测。
                 else if (!(root != null && root.gameObject.activeSelf && ReferenceEquals(r, shownResult)
